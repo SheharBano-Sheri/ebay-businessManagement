@@ -1,0 +1,4 @@
+Date,Order #,SKU,Item,Qty,Type,Gross Amount,Fees,Sourcing Cost,Shipping Cost,Currency
+01/15/2024,123456789,SKU-001,Sample Product Name,1,Sale,49.99,7.50,15.00,5.00,USD
+01/16/2024,123456790,SKU-002,Another Product,2,Sale,99.98,15.00,30.00,8.50,USD
+01/17/2024,123456791,SKU-001,Sample Product Name,1,Sale,49.99,7.50,15.00,5.00,EUR
