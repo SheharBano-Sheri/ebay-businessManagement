@@ -56,6 +56,7 @@ function InventoryContent() {
   const [selectedVendor, setSelectedVendor] = useState("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [uploadingCSV, setUploadingCSV] = useState(false);
+  const [currency, setCurrency] = useState("USD");
 
   const [formData, setFormData] = useState({
     country: "",
@@ -67,7 +68,46 @@ function InventoryContent() {
     stock: 0,
     unitCost: 0,
     listingUrl: "",
+    currency: "USD",
   });
+
+  // Country to currency mapping
+  const countryCurrencyMap = {
+    'USA': 'USD',
+    'US': 'USD',
+    'United States': 'USD',
+    'UK': 'GBP',
+    'United Kingdom': 'GBP',
+    'Canada': 'CAD',
+    'Australia': 'AUD',
+    'India': 'INR',
+    'Japan': 'JPY',
+    'China': 'CNY',
+    'Germany': 'EUR',
+    'France': 'EUR',
+    'Italy': 'EUR',
+    'Spain': 'EUR',
+    'Netherlands': 'EUR',
+    'Belgium': 'EUR',
+    'Austria': 'EUR',
+    'Switzerland': 'CHF',
+    'Sweden': 'SEK',
+    'Norway': 'NOK',
+    'Denmark': 'DKK',
+    'Poland': 'PLN',
+    'Mexico': 'MXN',
+    'Brazil': 'BRL',
+    'Argentina': 'ARS',
+    'South Korea': 'KRW',
+    'Singapore': 'SGD',
+    'Hong Kong': 'HKD',
+    'New Zealand': 'NZD',
+    'UAE': 'AED',
+    'Saudi Arabia': 'SAR',
+    'South Africa': 'ZAR',
+    'Turkey': 'TRY',
+    'Russia': 'RUB',
+  };
 
   useEffect(() => {
     fetchProducts();
@@ -128,6 +168,7 @@ function InventoryContent() {
       if (response.ok) {
         toast.success("Product added successfully!");
         setIsAddDialogOpen(false);
+        setCurrency("USD");
         setFormData({
           country: "",
           sku: "",
@@ -138,6 +179,7 @@ function InventoryContent() {
           stock: 0,
           unitCost: 0,
           listingUrl: "",
+          currency: "USD",
         });
         fetchProducts();
       } else {
@@ -150,10 +192,22 @@ function InventoryContent() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
+    
+    if (name === 'country') {
+      // Auto-detect currency based on country
+      const detectedCurrency = countryCurrencyMap[value] || countryCurrencyMap[value.trim()] || 'USD';
+      setCurrency(detectedCurrency);
+      setFormData({
+        ...formData,
+        [name]: value,
+        currency: detectedCurrency,
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value,
+      });
+    }
   };
 
   const handleDownloadCSV = async () => {
@@ -224,24 +278,31 @@ function InventoryContent() {
       if (response.ok) {
         toast.success(data.message);
         if (data.results.errors.length > 0) {
-          console.log("Upload errors:", data.results.errors);
+          console.warn("Upload errors:", data.results.errors);
+          // Show first few errors as toast
+          const errorPreview = data.results.errors.slice(0, 3).join('; ');
+          toast.warning(`Some rows had errors: ${errorPreview}${data.results.errors.length > 3 ? '...' : ''}`, {
+            duration: 8000
+          });
         }
         fetchProducts();
       } else {
         toast.error(data.error || "Failed to upload CSV");
+        console.error("Upload error:", data);
       }
     } catch (error) {
-      toast.error("An error occurred while uploading CSV");
+      console.error("Upload exception:", error);
+      toast.error("An error occurred while uploading CSV: " + error.message);
     } finally {
       setUploadingCSV(false);
       e.target.value = ''; // Reset file input
     }
   };
 
-  const formatCurrency = (amount) => {
+  const formatCurrency = (amount, curr = "USD") => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD",
+      currency: curr,
     }).format(amount);
   };
 
@@ -423,7 +484,7 @@ function InventoryContent() {
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="unitCost">Unit Cost (USD)</Label>
+                            <Label htmlFor="unitCost">Unit Cost ({currency})</Label>
                             <Input
                               id="unitCost"
                               name="unitCost"
@@ -512,20 +573,23 @@ function InventoryContent() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-gradient-to-r from-primary/10 to-primary/5 border-b-2">
+                      <TableHead className="font-bold border-r">COUNTRY</TableHead>
                       <TableHead className="font-bold border-r">SKU</TableHead>
                       <TableHead className="font-bold border-r">NAME</TableHead>
+                      <TableHead className="font-bold border-r">DESCRIPTION</TableHead>
                       <TableHead className="font-bold border-r">TYPE</TableHead>
                       <TableHead className="font-bold border-r">VENDOR</TableHead>
                       <TableHead className="text-right font-bold border-r">STOCK</TableHead>
                       <TableHead className="text-right font-bold border-r">UNIT COST</TableHead>
                       <TableHead className="text-right font-bold border-r">TOTAL VALUE</TableHead>
+                      <TableHead className="font-bold border-r">LISTING URL</TableHead>
                       <TableHead className="font-bold">ACTIONS</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8">
+                        <TableCell colSpan={11} className="text-center py-8">
                           <div className="flex flex-col items-center gap-2">
                             <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
                             <span className="text-muted-foreground">Loading inventory...</span>
@@ -534,7 +598,7 @@ function InventoryContent() {
                       </TableRow>
                     ) : filteredProducts.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-12">
+                        <TableCell colSpan={11} className="text-center py-12">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
                             <Package2 className="h-12 w-12 opacity-50" />
                             <p className="text-lg font-medium">No products found</p>
@@ -548,10 +612,26 @@ function InventoryContent() {
                           key={product._id}
                           className={`hover:bg-muted/50 transition-colors ${index % 2 === 0 ? 'bg-background' : 'bg-muted/20'}`}
                         >
+                          <TableCell className="font-medium border-r">
+                            {product.country ? (
+                              <Badge variant="outline" className="font-medium">
+                                {product.country}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
                           <TableCell className="font-mono font-semibold text-primary border-r">
                             {product.sku}
                           </TableCell>
                           <TableCell className="font-medium border-r">{product.name}</TableCell>
+                          <TableCell className="border-r max-w-xs truncate" title={product.description}>
+                            {product.description ? (
+                              <span className="text-sm text-muted-foreground">{product.description}</span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
                           <TableCell className="border-r">
                             {product.type ? (
                               <Badge variant="secondary" className="font-medium">
@@ -578,10 +658,27 @@ function InventoryContent() {
                             </div>
                           </TableCell>
                           <TableCell className="text-right font-semibold border-r text-blue-600 dark:text-blue-400">
-                            {formatCurrency(product.unitCost)}
+                            {formatCurrency(product.unitCost, product.currency || 'USD')}
                           </TableCell>
                           <TableCell className="text-right font-bold text-lg border-r text-green-600 dark:text-green-400">
-                            {formatCurrency(product.stock * product.unitCost)}
+                            {formatCurrency(product.stock * product.unitCost, product.currency || 'USD')}
+                          </TableCell>
+                          <TableCell className="border-r">
+                            {product.listingUrl ? (
+                              <a 
+                                href={product.listingUrl} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline text-sm flex items-center gap-1"
+                              >
+                                View Link
+                                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                              </a>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1">

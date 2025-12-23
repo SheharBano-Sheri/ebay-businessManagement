@@ -37,9 +37,11 @@ export async function POST(request) {
     const vendors = await Vendor.find({ adminId });
     const vendorMap = new Map();
     vendors.forEach(v => {
-      vendorMap.set(v.name.toLowerCase(), v._id);
+      vendorMap.set(v.name.toLowerCase().trim(), v._id);
       vendorMap.set(v._id.toString(), v._id);
     });
+
+    console.log('Available vendors:', Array.from(vendorMap.keys()));
 
     const results = {
       success: 0,
@@ -53,8 +55,10 @@ export async function POST(request) {
         // Parse CSV line (handle quoted fields)
         const fields = parseCSVLine(line);
         
-        if (fields.length < 8) {
-          results.errors.push(`Row ${i + 2}: Insufficient columns`);
+        console.log(`Row ${i + 2}: Parsed fields:`, fields);
+        
+        if (fields.length < 6) {
+          results.errors.push(`Row ${i + 2}: Insufficient columns (need at least 6, got ${fields.length})`);
           results.failed++;
           continue;
         }
@@ -62,22 +66,40 @@ export async function POST(request) {
         const [country, sku, name, description, type, vendorIdentifier, stock, unitCost, listingUrl] = fields;
 
         if (!sku || !name) {
-          results.errors.push(`Row ${i + 2}: Missing required fields (SKU or Name)`);
+          results.errors.push(`Row ${i + 2}: Missing required fields (SKU: "${sku}", Name: "${name}")`);
           results.failed++;
           continue;
         }
 
-        // Find vendor by name or ID
-        const vendorId = vendorMap.get(vendorIdentifier.toLowerCase()) || vendorMap.get(vendorIdentifier);
+        // Find vendor by name or ID (case-insensitive, trimmed)
+        const vendorKey = vendorIdentifier.toLowerCase().trim();
+        const vendorId = vendorMap.get(vendorKey) || vendorMap.get(vendorIdentifier);
         
         if (!vendorId) {
-          results.errors.push(`Row ${i + 2}: Vendor "${vendorIdentifier}" not found`);
+          results.errors.push(`Row ${i + 2}: Vendor "${vendorIdentifier}" not found. Available vendors: ${Array.from(vendorMap.keys()).join(', ')}`);
           results.failed++;
           continue;
         }
 
         // Check if product with same SKU exists
         const existingProduct = await Product.findOne({ adminId, sku });
+        
+        // Detect currency from country
+        const countryCurrencyMap = {
+          'USA': 'USD', 'US': 'USD', 'United States': 'USD',
+          'UK': 'GBP', 'United Kingdom': 'GBP',
+          'Canada': 'CAD', 'Australia': 'AUD', 'India': 'INR',
+          'Japan': 'JPY', 'China': 'CNY', 'Germany': 'EUR',
+          'France': 'EUR', 'Italy': 'EUR', 'Spain': 'EUR',
+          'Netherlands': 'EUR', 'Belgium': 'EUR', 'Austria': 'EUR',
+          'Switzerland': 'CHF', 'Sweden': 'SEK', 'Norway': 'NOK',
+          'Denmark': 'DKK', 'Poland': 'PLN', 'Mexico': 'MXN',
+          'Brazil': 'BRL', 'Argentina': 'ARS', 'South Korea': 'KRW',
+          'Singapore': 'SGD', 'Hong Kong': 'HKD', 'New Zealand': 'NZD',
+          'UAE': 'AED', 'Saudi Arabia': 'SAR', 'South Africa': 'ZAR',
+          'Turkey': 'TRY', 'Russia': 'RUB'
+        };
+        const detectedCurrency = country ? (countryCurrencyMap[country] || countryCurrencyMap[country.trim()] || 'USD') : 'USD';
         
         if (existingProduct) {
           // Update existing product
@@ -89,6 +111,7 @@ export async function POST(request) {
           existingProduct.stock = parseInt(stock) || 0;
           existingProduct.unitCost = parseFloat(unitCost) || 0;
           existingProduct.listingUrl = listingUrl || existingProduct.listingUrl;
+          existingProduct.currency = detectedCurrency;
           existingProduct.updatedAt = new Date();
           await existingProduct.save();
         } else {
@@ -105,17 +128,20 @@ export async function POST(request) {
             addedBy: session.user.id,
             stock: parseInt(stock) || 0,
             unitCost: parseFloat(unitCost) || 0,
-            currency: 'USD',
+            currency: detectedCurrency,
             isActive: true
           });
         }
 
         results.success++;
       } catch (error) {
+        console.error(`Row ${i + 2} error:`, error);
         results.errors.push(`Row ${i + 2}: ${error.message}`);
         results.failed++;
       }
     }
+
+    console.log('Upload results:', results);
 
     return NextResponse.json({ 
       message: `Import completed: ${results.success} successful, ${results.failed} failed`,

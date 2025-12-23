@@ -20,8 +20,8 @@ export async function GET(request) {
 
     if (type === 'template') {
       // Return CSV template
-      const csvTemplate = 'Country,SKU,Product Name,Description,Type,Vendor ID,Stock Quantity,Unit Cost,Listing URL\n' +
-                          'USA,SAMPLE-001,Sample Product,Product description,Electronics,vendor_id_here,100,29.99,https://example.com/product';
+      const csvTemplate = 'Country,SKU,Product Name,Description,Type,Vendor,Stock Quantity,Unit Cost,Listing URL\n' +
+                          'USA,SAMPLE-001,Sample Product,"Product description here",Electronics,Vendor Name,100,29.99,https://example.com/product';
       
       return new NextResponse(csvTemplate, {
         status: 200,
