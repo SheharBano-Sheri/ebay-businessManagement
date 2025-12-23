@@ -41,6 +41,7 @@ export default function SignInPage() {
         toast.error(result.error);
       } else if (result?.ok) {
         toast.success("Signed in successfully!");
+        router.refresh();
         router.push("/dashboard");
       }
     } catch (error) {

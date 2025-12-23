@@ -1,9 +1,11 @@
-import { Resend } from 'resend';
-
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function sendTeamInvitationEmail({ to, name, inviterName, inviterEmail, role, inviteToken }) {
   try {
+    // If no email service is configured, return success but log a warning
+    if (!process.env.RESEND_API_KEY && !process.env.EMAIL_HOST) {
+      console.warn('Email service not configured. Skipping invitation email.');
+      return { success: true, skipped: true, message: 'Email service not configured' };
+    }
+
     // Use the owner's email as the sender
     const senderEmail = inviterEmail;
     const senderName = inviterName || process.env.APP_NAME || 'eBay BMS';
@@ -12,6 +14,8 @@ export async function sendTeamInvitationEmail({ to, name, inviterName, inviterEm
     
     // If Resend API key is configured, use Resend (simpler)
     if (process.env.RESEND_API_KEY) {
+      const { Resend } = require('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
       const { data, error } = await resend.emails.send({
         from: `${senderName} <${senderEmail}>`,
         to,
@@ -190,6 +194,12 @@ If you didn't expect this invitation, you can safely ignore this email.
 
 export async function sendVendorInvitationEmail({ to, name, businessName, inviterName, inviterEmail, inviteToken }) {
   try {
+    // If no email service is configured, return success but log a warning
+    if (!process.env.RESEND_API_KEY && !process.env.EMAIL_HOST) {
+      console.warn('Email service not configured. Skipping vendor invitation email.');
+      return { success: true, skipped: true, message: 'Email service not configured' };
+    }
+
     const senderEmail = inviterEmail;
     const senderName = inviterName || process.env.APP_NAME || 'eBay BMS';
     
@@ -197,6 +207,8 @@ export async function sendVendorInvitationEmail({ to, name, businessName, invite
     
     // If Resend API key is configured, use Resend
     if (process.env.RESEND_API_KEY) {
+      const { Resend } = require('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
       const { data, error } = await resend.emails.send({
         from: `${senderName} <${senderEmail}>`,
         to,
