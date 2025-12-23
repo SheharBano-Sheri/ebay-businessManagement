@@ -37,7 +37,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Search, Edit, Trash2, Package, Package2, AlertCircle } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Package, Package2, AlertCircle, Download, Upload, FileDown, MoreVertical } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function InventoryContent() {
   const { data: session } = useSession();
@@ -49,8 +55,10 @@ function InventoryContent() {
   const [selectedType, setSelectedType] = useState("all");
   const [selectedVendor, setSelectedVendor] = useState("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [uploadingCSV, setUploadingCSV] = useState(false);
 
   const [formData, setFormData] = useState({
+    country: "",
     sku: "",
     name: "",
     description: "",
@@ -58,6 +66,7 @@ function InventoryContent() {
     vendorId: "",
     stock: 0,
     unitCost: 0,
+    listingUrl: "",
   });
 
   useEffect(() => {
@@ -120,6 +129,7 @@ function InventoryContent() {
         toast.success("Product added successfully!");
         setIsAddDialogOpen(false);
         setFormData({
+          country: "",
           sku: "",
           name: "",
           description: "",
@@ -127,6 +137,7 @@ function InventoryContent() {
           vendorId: "",
           stock: 0,
           unitCost: 0,
+          listingUrl: "",
         });
         fetchProducts();
       } else {
@@ -143,6 +154,88 @@ function InventoryContent() {
       ...formData,
       [name]: value,
     });
+  };
+
+  const handleDownloadCSV = async () => {
+    try {
+      const response = await fetch("/api/products/export");
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `inventory-export-${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        toast.success("CSV downloaded successfully!");
+      } else {
+        toast.error("Failed to download CSV");
+      }
+    } catch (error) {
+      toast.error("An error occurred while downloading CSV");
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await fetch("/api/products/export?type=template");
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'inventory-template.csv';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        toast.success("Template downloaded successfully!");
+      } else {
+        toast.error("Failed to download template");
+      }
+    } catch (error) {
+      toast.error("An error occurred while downloading template");
+    }
+  };
+
+  const handleUploadCSV = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.csv')) {
+      toast.error("Please upload a CSV file");
+      return;
+    }
+
+    try {
+      setUploadingCSV(true);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch("/api/products/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message);
+        if (data.results.errors.length > 0) {
+          console.log("Upload errors:", data.results.errors);
+        }
+        fetchProducts();
+      } else {
+        toast.error(data.error || "Failed to upload CSV");
+      }
+    } catch (error) {
+      toast.error("An error occurred while uploading CSV");
+    } finally {
+      setUploadingCSV(false);
+      e.target.value = ''; // Reset file input
+    }
   };
 
   const formatCurrency = (amount) => {
@@ -192,32 +285,76 @@ function InventoryContent() {
                   Manage your product inventory and stock levels
                 </p>
               </div>
-              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Product
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl">
-                  <form onSubmit={handleSubmit}>
-                    <DialogHeader>
-                      <DialogTitle>Add New Product</DialogTitle>
-                      <DialogDescription>
-                        Add a new product to your inventory
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="sku">SKU *</Label>
-                          <Input
-                            id="sku"
-                            name="sku"
-                            value={formData.sku}
-                            onChange={handleChange}
-                            required
-                          />
+              <div className="flex gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline">
+                      <MoreVertical className="mr-2 h-4 w-4" />
+                      Actions
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onClick={handleDownloadCSV}>
+                      <Download className="mr-2 h-4 w-4" />
+                      Download CSV
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleDownloadTemplate}>
+                      <FileDown className="mr-2 h-4 w-4" />
+                      Export Template
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <label className="flex items-center cursor-pointer">
+                        <Upload className="mr-2 h-4 w-4" />
+                        Upload CSV
+                        <input
+                          type="file"
+                          accept=".csv"
+                          onChange={handleUploadCSV}
+                          className="hidden"
+                          disabled={uploadingCSV}
+                        />
+                      </label>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Product
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <form onSubmit={handleSubmit}>
+                      <DialogHeader>
+                        <DialogTitle>Add New Product</DialogTitle>
+                        <DialogDescription>
+                          Add a new product to your inventory
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="country">Country</Label>
+                            <Input
+                              id="country"
+                              name="country"
+                              value={formData.country}
+                              onChange={handleChange}
+                              placeholder="e.g., USA, UK, Canada"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="sku">SKU *</Label>
+                            <Input
+                              id="sku"
+                              name="sku"
+                              value={formData.sku}
+                              onChange={handleChange}
+                              required
+                              placeholder="e.g., PROD-001"
+                            />
+                          </div>
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="name">Product Name *</Label>
@@ -227,80 +364,96 @@ function InventoryContent() {
                             value={formData.name}
                             onChange={handleChange}
                             required
+                            placeholder="Enter product name"
                           />
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="description">Description</Label>
-                        <Textarea
-                          id="description"
-                          name="description"
-                          value={formData.description}
-                          onChange={handleChange}
-                          rows={3}
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="type">Type</Label>
-                          <Input
-                            id="type"
-                            name="type"
-                            value={formData.type}
+                          <Label htmlFor="description">Description</Label>
+                          <Textarea
+                            id="description"
+                            name="description"
+                            value={formData.description}
                             onChange={handleChange}
+                            rows={3}
+                            placeholder="Enter product description"
                           />
                         </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="type">Type</Label>
+                            <Input
+                              id="type"
+                              name="type"
+                              value={formData.type}
+                              onChange={handleChange}
+                              placeholder="e.g., Electronics, Clothing"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="vendorId">Vendor *</Label>
+                            <Select
+                              value={formData.vendorId}
+                              onValueChange={(value) =>
+                                setFormData({ ...formData, vendorId: value })
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select vendor" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {vendors.map((vendor) => (
+                                  <SelectItem key={vendor._id} value={vendor._id}>
+                                    {vendor.name} ({vendor.vendorType})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="stock">Stock Quantity</Label>
+                            <Input
+                              id="stock"
+                              name="stock"
+                              type="number"
+                              value={formData.stock}
+                              onChange={handleChange}
+                              placeholder="0"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="unitCost">Unit Cost (USD)</Label>
+                            <Input
+                              id="unitCost"
+                              name="unitCost"
+                              type="number"
+                              step="0.01"
+                              value={formData.unitCost}
+                              onChange={handleChange}
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </div>
                         <div className="space-y-2">
-                          <Label htmlFor="vendorId">Vendor *</Label>
-                          <Select
-                            value={formData.vendorId}
-                            onValueChange={(value) =>
-                              setFormData({ ...formData, vendorId: value })
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select vendor" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {vendors.map((vendor) => (
-                                <SelectItem key={vendor._id} value={vendor._id}>
-                                  {vendor.name} ({vendor.vendorType})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <Label htmlFor="listingUrl">Listing Data Link</Label>
+                          <Input
+                            id="listingUrl"
+                            name="listingUrl"
+                            type="url"
+                            value={formData.listingUrl}
+                            onChange={handleChange}
+                            placeholder="https://example.com/product"
+                          />
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="stock">Stock Quantity</Label>
-                          <Input
-                            id="stock"
-                            name="stock"
-                            type="number"
-                            value={formData.stock}
-                            onChange={handleChange}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="unitCost">Unit Cost (USD)</Label>
-                          <Input
-                            id="unitCost"
-                            name="unitCost"
-                            type="number"
-                            step="0.01"
-                            value={formData.unitCost}
-                            onChange={handleChange}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button type="submit">Add Product</Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
+                      <DialogFooter>
+                        <Button type="submit">Add Product</Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </div>
 
             {/* Filters */}

@@ -1,6 +1,9 @@
 import mongoose from 'mongoose';
 
 const ProductSchema = new mongoose.Schema({
+  country: {
+    type: String
+  },
   sku: {
     type: String,
     required: true
@@ -13,6 +16,9 @@ const ProductSchema = new mongoose.Schema({
     type: String
   },
   type: {
+    type: String
+  },
+  listingUrl: {
     type: String
   },
   adminId: {

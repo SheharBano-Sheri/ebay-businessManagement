@@ -39,7 +39,7 @@ export async function POST(request) {
     await connectDB();
     const body = await request.json();
 
-    const { sku, name, description, type, vendorId, stock, unitCost, currency, images } = body;
+    const { country, sku, name, description, type, vendorId, stock, unitCost, currency, images, listingUrl } = body;
 
     if (!sku || !name || !vendorId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -48,10 +48,12 @@ export async function POST(request) {
     const adminId = session.user.adminId;
 
     const product = await Product.create({
+      country,
       sku,
       name,
       description,
       type,
+      listingUrl,
       adminId,
       vendorId,
       addedBy: session.user.id,
