@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { User, Mail, Building2, CreditCard, Bell, Shield, LogOut, Users } from "lucide-react";
+import { User, Mail, Building2, CreditCard, Bell, Shield, LogOut, Users, Monitor, Smartphone, Clock, MapPin, Check, X, Trash2 } from "lucide-react";
 
 function SettingsContent() {
   const { data: session } = useSession();
@@ -30,10 +30,20 @@ function SettingsContent() {
     newPassword: '',
     confirmPassword: ''
   });
+  const [activeSessions, setActiveSessions] = useState([]);
+  const [loginHistory, setLoginHistory] = useState([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     if (session?.user?.role === 'public_vendor') {
       fetchVendorNotifications();
+    }
+    
+    // Fetch sessions and login history when security tab is potentially active
+    if (defaultTab === 'security') {
+      fetchActiveSessions();
+      fetchLoginHistory();
     }
   }, [session, defaultTab]);
 
@@ -55,7 +65,37 @@ function SettingsContent() {
       const response = await fetch('/api/auth/sessions');
       const data = await response.json();
       if (response.ok) {
-        
+        setActiveSessions(data.sessions || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch sessions');
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
+
+  const fetchLoginHistory = async () => {
+    try {
+      setLoadingHistory(true);
+      const response = await fetch('/api/auth/login-history?limit=10');
+      const data = await response.json();
+      if (response.ok) {
+        setLoginHistory(data.history || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch login history');
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.error('New passwords do not match');
+      return;
+    }
 
     if (passwordForm.newPassword.length < 6) {
       toast.error('Password must be at least 6 characters');
@@ -118,7 +158,41 @@ function SettingsContent() {
         toast.error('Failed to revoke sessions');
       }
     } catch (error) {
-      toast.er  <TabsTrigger value="account">Account</TabsTrigger>
+      toast.error('Error revoking sessions');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut({ callbackUrl: '/auth/signin' });
+    } catch (error) {
+      toast.error("Error signing out");
+    }
+  };
+
+  return (
+    <SidebarProvider
+      style={{
+        "--sidebar-width": "calc(var(--spacing) * 72)",
+        "--header-height": "calc(var(--spacing) * 12)",
+      }}
+    >
+      <AppSidebar variant="inset" />
+      <SidebarInset>
+        <SiteHeader />
+        <div className="flex flex-1 flex-col p-4 lg:p-6">
+          <div className="space-y-6">
+            {/* Page Header */}
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+              <p className="text-muted-foreground">
+                Manage your account settings and preferences
+              </p>
+            </div>
+
+            <Tabs defaultValue={defaultTab} className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="account">Account</TabsTrigger>
                 <TabsTrigger value="billing">Billing</TabsTrigger>
                 <TabsTrigger value="notifications">Notifications</TabsTrigger>
                 <TabsTrigger value="security">Security</TabsTrigger>
@@ -333,3 +407,109 @@ function SettingsContent() {
                             <div className="flex items-start gap-3">
                               <div className="mt-1">
                                 {sess.device === 'Mobile' ? (
+                                  <Smartphone className="h-5 w-5 text-muted-foreground" />
+                                ) : (
+                                  <Monitor className="h-5 w-5 text-muted-foreground" />
+                                )}
+                              </div>
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium">
+                                    {sess.browser} on {sess.os}
+                                  </p>
+                                  {sess.isCurrent && (
+                                    <Badge variant="default" className="text-xs">Current</Badge>
+                                  )}
+                                </div>
+                                <div className="text-sm text-muted-foreground space-y-1">
+                                  <div className="flex items-center gap-1">
+                                    <MapPin className="h-3 w-3" />
+                                    <span>{sess.location}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    <span>Last active: {new Date(sess.lastActive).toLocaleString()}</span>
+                                  </div>
+                                  <p className="text-xs">IP: {sess.ipAddress}</p>
+                                </div>
+                              </div>
+                            </div>
+                            {!sess.isCurrent && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRevokeSession(sess._id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Login History */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Login History</CardTitle>
+                    <CardDescription>
+                      Recent login attempts to your account
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingHistory ? (
+                      <p className="text-sm text-muted-foreground">Loading history...</p>
+                    ) : loginHistory.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No login history found</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {loginHistory.map((entry) => (
+                          <div key={entry._id} className="flex items-start gap-3 p-3 border rounded-lg">
+                            <div className="mt-1">
+                              {entry.success ? (
+                                <Check className="h-4 w-4 text-green-500" />
+                              ) : (
+                                <X className="h-4 w-4 text-red-500" />
+                              )}
+                            </div>
+                            <div className="flex-1 space-y-1">
+                              <div className="flex items-center justify-between">
+                                <p className="font-medium text-sm">
+                                  {entry.browser} on {entry.os}
+                                </p>
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(entry.createdAt).toLocaleString()}
+                                </span>
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                <p>{entry.location} • {entry.ipAddress}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <p>Loading...</p>
+      </div>
+    }>
+      <SettingsContent />
+    </Suspense>
+  );
+}
