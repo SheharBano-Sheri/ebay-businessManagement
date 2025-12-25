@@ -4,7 +4,6 @@ import { authOptions } from '../auth/[...nextauth]/route';
 import connectDB from '@/lib/mongodb';
 import TeamMember from '@/models/TeamMember';
 import User from '@/models/User';
-import { sendTeamInvitationEmail } from '@/lib/email';
 
 export async function GET(request) {
   try {
