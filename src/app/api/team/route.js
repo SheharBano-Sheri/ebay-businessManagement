@@ -99,25 +99,14 @@ export async function POST(request) {
 
     console.log('Team member created:', newMember._id);
 
-    // Send invitation email
-    const emailResult = await sendTeamInvitationEmail({
-      to: email,
-      name,
-      inviterName: user.name || session.user.name || session.user.email,
-      inviterEmail: session.user.email,
-      role: role || 'member',
-      inviteToken
-    });
-
-    if (!emailResult.success) {
-      console.error('Failed to send invitation email:', emailResult.error);
-      // Don't fail the request, but log the error
-    }
+    // Email functionality temporarily disabled - share invite link manually
+    const inviteLink = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/auth/signup?token=${inviteToken}&email=${encodeURIComponent(email)}`;
 
     return NextResponse.json({ 
-      message: 'Team member invited successfully. An invitation email has been sent.',
+      message: 'Team member invited successfully. Share the signup link with them.',
       member: newMember,
-      emailSent: emailResult.success
+      inviteLink: inviteLink,
+      emailSent: false
     }, { status: 201 });
 
   } catch (error) {

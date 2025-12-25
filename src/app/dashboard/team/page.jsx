@@ -90,10 +90,17 @@ export default function TeamPage() {
       const data = await response.json();
 
       if (response.ok) {
-        toast.success(data.emailSent 
-          ? 'Team member invited! An email has been sent with signup instructions.' 
-          : 'Team member invited! Please share the signup link manually.'
-        );
+        // Show invite link to admin
+        if (data.inviteLink) {
+          toast.success('Team member invited! Copy and share this link:', {
+            description: data.inviteLink,
+            duration: 10000,
+          });
+          // Also copy to clipboard
+          navigator.clipboard.writeText(data.inviteLink).catch(() => {});
+        } else {
+          toast.success('Team member invited successfully!');
+        }
         setIsInviteOpen(false);
         setInviteForm({
           email: '',
