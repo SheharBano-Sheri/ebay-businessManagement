@@ -1,4 +1,4 @@
-# Ebay-BMS Setup Guide
+# GenieBMS Setup Guide
 
 ## Quick Start Checklist
 

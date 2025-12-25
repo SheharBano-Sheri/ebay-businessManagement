@@ -17,7 +17,7 @@ NEXTAUTH_SECRET=KnkLD86vVLQ2nJfRMHF2qPq6gdX21AFR+zwXDPCozJU=
 NEXTAUTH_URL=https://your-app-name.vercel.app
 # ⚠️ IMPORTANT: Update this to your actual Vercel URL after first deployment
 
-APP_NAME=eBay Business Management System
+APP_NAME=GenieBMS
 
 # Email (Optional - for team invitations)
 RESEND_API_KEY=re_your_api_key_here

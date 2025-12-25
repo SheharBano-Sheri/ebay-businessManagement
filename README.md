@@ -1,6 +1,6 @@
-# Ebay-BMS - Business Management System
+# GenieBMS - Business Management System
 
-A comprehensive business management dashboard designed for eBay sellers. Manage inventory, orders, vendors, payments, teams, and analytics in a single web-based system.
+A comprehensive business management dashboard designed for online sellers. Manage inventory, orders, vendors, payments, teams, and analytics in a single web-based system.
 
 ## 🚀 Features
 

@@ -17,14 +17,14 @@ const FEATURES = [
     id: "tab-1",
     number: 1,
     title: "Manage Inventory",
-    description: "Real-time inventory tracking across all eBay channels and warehouses. Keep stock levels synchronized automatically.",
+    description: "Real-time inventory tracking across all channels and warehouses. Keep stock levels synchronized automatically.",
     image: "/hero/image.png",
   },
   {
     id: "tab-2",
     number: 2,
     title: "Track Orders & Shipping",
-    description: "Unified order management from multiple eBay stores. Automate shipping labels and track deliveries in real-time.",
+    description: "Unified order management from multiple stores. Automate shipping labels and track deliveries in real-time.",
     image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&h=600&fit=crop",
   },
   {
@@ -38,7 +38,7 @@ const FEATURES = [
     id: "tab-4",
     number: 4,
     title: "Business Growth Tools",
-    description: "Optimize pricing strategies, manage listings efficiently, and scale your eBay business with advanced automation.",
+    description: "Optimize pricing strategies, manage listings efficiently, and scale your business with advanced automation.",
     image: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800&h=600&fit=crop",
   },
 ];
@@ -46,12 +46,12 @@ const FEATURES = [
 const PRICING_PLANS = [
   {
     name: "Personal",
-    description: "Perfect for solo entrepreneurs starting their eBay journey",
+    description: "Perfect for solo entrepreneurs starting their business journey",
     price: "$9/month billed monthly",
     priceYearly: "$8/month billed yearly",
     features: [
       "Single user account",
-      "Up to 5 eBay store monitors",
+      "Up to 5 store monitors",
       "Real-time inventory sync",
       "Basic analytics dashboard",
       "Email support (24hr response)",
@@ -63,12 +63,12 @@ const PRICING_PLANS = [
   },
   {
     name: "Pro",
-    description: "Built for growing teams ready to scale their eBay business",
+    description: "Built for growing teams ready to scale their business",
     price: "$29/month billed monthly",
     priceYearly: "$24/month billed yearly",
     features: [
       "Up to 10 team members + 1 admin",
-      "Unlimited eBay store monitors",
+      "Unlimited store monitors",
       "Automated order processing",
       "Priority email & chat support",
       "Custom integrations"
@@ -80,7 +80,7 @@ const PRICING_PLANS = [
   },
   {
     name: "Enterprise",
-    description: "Tailored solutions for large-scale eBay operations",
+    description: "Tailored solutions for large-scale operations",
     price: "Custom pricing",
     features: [
       "Unlimited team members",
@@ -105,13 +105,13 @@ export default function Home() {
         <div className="container mx-auto">
           <div className="mb-20 max-w-4xl px-8 lg:px-0 mx-auto text-center flex flex-col items-center gap-6">
             <span data-slot="badge" className="inline-flex items-center justify-center rounded-full border-2 border-primary/20 bg-primary/5 px-4 py-1.5 text-sm font-semibold w-fit whitespace-nowrap shrink-0 gap-2 transition-all hover:border-primary/40 hover:bg-primary/10 text-primary">
-              🚀 Grow Your eBay Business
+              🚀 Grow Your Business
             </span>
             <h1 className="mb-4 mt-2 text-balance text-4xl font-bold md:text-6xl lg:text-7xl bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 dark:from-white dark:via-gray-100 dark:to-white bg-clip-text text-transparent leading-tight">
-              Streamline Your eBay Operations with Smart Business Management
+              Streamline Your Operations with Smart Business Management
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed">
-              All-in-one platform to manage inventory, orders, shipping, and analytics. Scale your eBay business faster and smarter.
+              All-in-one platform to manage inventory, orders, shipping, and analytics. Scale your business faster and smarter.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 mt-4">
               <Link href="/auth/signup">

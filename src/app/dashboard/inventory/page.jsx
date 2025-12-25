@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
+import { useRef } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -57,6 +58,12 @@ function InventoryContent() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [uploadingCSV, setUploadingCSV] = useState(false);
   const [currency, setCurrency] = useState("USD");
+  const fileInputRef = useRef(null);
+  const [selectedProducts, setSelectedProducts] = useState([]);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState(null);
 
   const [formData, setFormData] = useState({
     country: "",
@@ -212,23 +219,161 @@ function InventoryContent() {
 
   const handleDownloadCSV = async () => {
     try {
-      const response = await fetch("/api/products/export");
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `inventory-export-${new Date().toISOString().split('T')[0]}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        toast.success("CSV downloaded successfully!");
+      let url;
+      
+      if (selectedProducts.length > 0) {
+        // Export only selected products
+        const selectedData = products.filter(p => selectedProducts.includes(p._id));
+        const csv = generateCSVFromProducts(selectedData);
+        const blob = new Blob([csv], { type: 'text/csv' });
+        url = window.URL.createObjectURL(blob);
       } else {
-        toast.error("Failed to download CSV");
+        // Export all products
+        const response = await fetch("/api/products/export");
+        if (!response.ok) {
+          toast.error("Failed to download CSV");
+          return;
+        }
+        const blob = await response.blob();
+        url = window.URL.createObjectURL(blob);
       }
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `inventory-export-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      const count = selectedProducts.length || products.length;
+      toast.success(`${count} product(s) downloaded successfully!`);
     } catch (error) {
       toast.error("An error occurred while downloading CSV");
+    }
+  };
+
+  const generateCSVFromProducts = (productsToExport) => {
+    let csv = 'Country,SKU,Name,Description,Type,Vendor,Stock,Unit Cost,Listing URL\n';
+    
+    productsToExport.forEach(product => {
+      const row = [
+        product.country || '',
+        product.sku || '',
+        product.name || '',
+        `"${(product.description || '').replace(/"/g, '""')}"`,
+        product.type || '',
+        product.vendorId?.name || '',
+        product.stock || 0,
+        product.unitCost || 0,
+        product.listingUrl || ''
+      ].join(',');
+      csv += row + '\n';
+    });
+    
+    return csv;
+  };
+
+  const toggleProductSelection = (productId) => {
+    setSelectedProducts(prev => 
+      prev.includes(productId)
+        ? prev.filter(id => id !== productId)
+        : [...prev, productId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedProducts.length === filteredProducts.length) {
+      setSelectedProducts([]);
+    } else {
+      setSelectedProducts(filteredProducts.map(p => p._id));
+    }
+  };
+
+  const handleEdit = (product) => {
+    setEditingProduct(product);
+    const detectedCurrency = product.currency || countryCurrencyMap[product.country] || 'USD';
+    setCurrency(detectedCurrency);
+    setFormData({
+      country: product.country || '',
+      sku: product.sku || '',
+      name: product.name || '',
+      description: product.description || '',
+      type: product.type || '',
+      vendorId: product.vendorId?._id || '',
+      stock: product.stock || 0,
+      unitCost: product.unitCost || 0,
+      listingUrl: product.listingUrl || '',
+      currency: detectedCurrency,
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+
+    try {
+      const response = await fetch(`/api/products/${editingProduct._id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success("Product updated successfully!");
+        setIsEditDialogOpen(false);
+        setEditingProduct(null);
+        setCurrency("USD");
+        setFormData({
+          country: "",
+          sku: "",
+          name: "",
+          description: "",
+          type: "",
+          vendorId: "",
+          stock: 0,
+          unitCost: 0,
+          listingUrl: "",
+          currency: "USD",
+        });
+        fetchProducts();
+      } else {
+        toast.error(data.error || "Failed to update product");
+      }
+    } catch (error) {
+      toast.error("An error occurred while updating product");
+    }
+  };
+
+  const handleDeleteClick = (product) => {
+    setProductToDelete(product);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!productToDelete) return;
+
+    try {
+      const response = await fetch(`/api/products/${productToDelete._id}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success("Product deleted successfully!");
+        setDeleteConfirmOpen(false);
+        setProductToDelete(null);
+        fetchProducts();
+      } else {
+        toast.error(data.error || "Failed to delete product");
+      }
+    } catch (error) {
+      toast.error("An error occurred while deleting product");
     }
   };
 
@@ -256,28 +401,51 @@ function InventoryContent() {
 
   const handleUploadCSV = async (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      console.log('No file selected');
+      return;
+    }
+
+    console.log('File selected:', file.name, file.type, file.size);
 
     if (!file.name.endsWith('.csv')) {
       toast.error("Please upload a CSV file");
       return;
     }
 
+    const loadingToast = toast.loading("Uploading CSV file...");
+
     try {
       setUploadingCSV(true);
       const formData = new FormData();
       formData.append('file', file);
+
+      console.log('Sending request to /api/products/upload');
 
       const response = await fetch("/api/products/upload", {
         method: "POST",
         body: formData,
       });
 
+      console.log('Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        toast.dismiss(loadingToast);
+        toast.error(`Upload failed: ${response.status} - ${errorText}`);
+        return;
+      }
+
       const data = await response.json();
+      console.log('Upload response:', data);
+
+      toast.dismiss(loadingToast);
 
       if (response.ok) {
-        toast.success(data.message);
-        if (data.results.errors.length > 0) {
+        toast.success(data.message || 'CSV uploaded successfully!');
+        
+        if (data.results && data.results.errors && data.results.errors.length > 0) {
           console.warn("Upload errors:", data.results.errors);
           // Show first few errors as toast
           const errorPreview = data.results.errors.slice(0, 3).join('; ');
@@ -285,13 +453,19 @@ function InventoryContent() {
             duration: 8000
           });
         }
-        fetchProducts();
+        
+        // Refresh products and vendors after successful upload
+        console.log('Refreshing products and vendors...');
+        await fetchProducts();
+        await fetchVendors();
+        console.log('Products refreshed');
       } else {
         toast.error(data.error || "Failed to upload CSV");
         console.error("Upload error:", data);
       }
     } catch (error) {
       console.error("Upload exception:", error);
+      toast.dismiss(loadingToast);
       toast.error("An error occurred while uploading CSV: " + error.message);
     } finally {
       setUploadingCSV(false);
@@ -344,9 +518,22 @@ function InventoryContent() {
                 <h1 className="text-3xl font-bold tracking-tight">Inventory</h1>
                 <p className="text-muted-foreground">
                   Manage your product inventory and stock levels
+                  {selectedProducts.length > 0 && (
+                    <span className="ml-2 text-primary font-semibold">
+                      • {selectedProducts.length} selected
+                    </span>
+                  )}
                 </p>
               </div>
               <div className="flex gap-2">
+                {selectedProducts.length > 0 && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setSelectedProducts([])}
+                  >
+                    Clear Selection
+                  </Button>
+                )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline">
@@ -357,27 +544,31 @@ function InventoryContent() {
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem onClick={handleDownloadCSV}>
                       <Download className="mr-2 h-4 w-4" />
-                      Download CSV
+                      {selectedProducts.length > 0 
+                        ? `Download Selected (${selectedProducts.length})` 
+                        : 'Download All CSV'}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleDownloadTemplate}>
                       <FileDown className="mr-2 h-4 w-4" />
                       Export Template
                     </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <label className="flex items-center cursor-pointer">
-                        <Upload className="mr-2 h-4 w-4" />
-                        Upload CSV
-                        <input
-                          type="file"
-                          accept=".csv"
-                          onChange={handleUploadCSV}
-                          className="hidden"
-                          disabled={uploadingCSV}
-                        />
-                      </label>
+                    <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                      <Upload className="mr-2 h-4 w-4" />
+                      {uploadingCSV ? 'Uploading...' : 'Upload CSV'}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={handleUploadCSV}
+                  className="hidden"
+                  disabled={uploadingCSV}
+                />
+                
                 <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                   <DialogTrigger asChild>
                     <Button>
@@ -397,13 +588,25 @@ function InventoryContent() {
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label htmlFor="country">Country</Label>
-                            <Input
-                              id="country"
-                              name="country"
+                            <Select
                               value={formData.country}
-                              onChange={handleChange}
-                              placeholder="e.g., USA, UK, Canada"
-                            />
+                              onValueChange={(value) => {
+                                const detectedCurrency = countryCurrencyMap[value] || 'USD';
+                                setCurrency(detectedCurrency);
+                                setFormData({ ...formData, country: value, currency: detectedCurrency });
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select country" />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-[300px]">
+                                {Object.keys(countryCurrencyMap).sort().map((country) => (
+                                  <SelectItem key={country} value={country}>
+                                    {country} ({countryCurrencyMap[country]})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor="sku">SKU *</Label>
@@ -514,6 +717,173 @@ function InventoryContent() {
                     </form>
                   </DialogContent>
                 </Dialog>
+
+                {/* Edit Product Dialog */}
+                <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <form onSubmit={handleUpdate}>
+                      <DialogHeader>
+                        <DialogTitle>Edit Product</DialogTitle>
+                        <DialogDescription>
+                          Update product information
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="edit-country">Country</Label>
+                            <Select
+                              value={formData.country}
+                              onValueChange={(value) => {
+                                const detectedCurrency = countryCurrencyMap[value] || 'USD';
+                                setCurrency(detectedCurrency);
+                                setFormData({ ...formData, country: value, currency: detectedCurrency });
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select country" />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-[300px]">
+                                {Object.keys(countryCurrencyMap).sort().map((country) => (
+                                  <SelectItem key={country} value={country}>
+                                    {country} ({countryCurrencyMap[country]})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="edit-sku">SKU *</Label>
+                            <Input
+                              id="edit-sku"
+                              name="sku"
+                              value={formData.sku}
+                              onChange={handleChange}
+                              required
+                              placeholder="e.g., PROD-001"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-name">Product Name *</Label>
+                          <Input
+                            id="edit-name"
+                            name="name"
+                            value={formData.name}
+                            onChange={handleChange}
+                            required
+                            placeholder="Enter product name"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-description">Description</Label>
+                          <Textarea
+                            id="edit-description"
+                            name="description"
+                            value={formData.description}
+                            onChange={handleChange}
+                            rows={3}
+                            placeholder="Enter product description"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="edit-type">Type</Label>
+                            <Input
+                              id="edit-type"
+                              name="type"
+                              value={formData.type}
+                              onChange={handleChange}
+                              placeholder="e.g., Electronics, Clothing"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="edit-vendorId">Vendor *</Label>
+                            <Select
+                              value={formData.vendorId}
+                              onValueChange={(value) =>
+                                setFormData({ ...formData, vendorId: value })
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select vendor" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {vendors.map((vendor) => (
+                                  <SelectItem key={vendor._id} value={vendor._id}>
+                                    {vendor.name} ({vendor.vendorType})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="edit-stock">Stock Quantity</Label>
+                            <Input
+                              id="edit-stock"
+                              name="stock"
+                              type="number"
+                              value={formData.stock}
+                              onChange={handleChange}
+                              placeholder="0"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="edit-unitCost">Unit Cost ({currency})</Label>
+                            <Input
+                              id="edit-unitCost"
+                              name="unitCost"
+                              type="number"
+                              step="0.01"
+                              value={formData.unitCost}
+                              onChange={handleChange}
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-listingUrl">Listing Data Link</Label>
+                          <Input
+                            id="edit-listingUrl"
+                            name="listingUrl"
+                            type="url"
+                            value={formData.listingUrl}
+                            onChange={handleChange}
+                            placeholder="https://example.com/product"
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button type="submit">Update Product</Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Delete Confirmation Dialog */}
+                <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Delete Product</DialogTitle>
+                      <DialogDescription>
+                        Are you sure you want to delete "{productToDelete?.name}"? This action cannot be undone.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button variant="destructive" onClick={handleDeleteConfirm}>
+                        Delete
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </div>
             </div>
 
@@ -573,6 +943,14 @@ function InventoryContent() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-gradient-to-r from-primary/10 to-primary/5 border-b-2">
+                      <TableHead className="w-12 border-r">
+                        <input
+                          type="checkbox"
+                          checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
+                          onChange={toggleSelectAll}
+                          className="h-4 w-4 cursor-pointer"
+                        />
+                      </TableHead>
                       <TableHead className="font-bold border-r">COUNTRY</TableHead>
                       <TableHead className="font-bold border-r">SKU</TableHead>
                       <TableHead className="font-bold border-r">NAME</TableHead>
@@ -589,7 +967,7 @@ function InventoryContent() {
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={11} className="text-center py-8">
+                        <TableCell colSpan={12} className="text-center py-8">
                           <div className="flex flex-col items-center gap-2">
                             <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
                             <span className="text-muted-foreground">Loading inventory...</span>
@@ -598,7 +976,7 @@ function InventoryContent() {
                       </TableRow>
                     ) : filteredProducts.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={11} className="text-center py-12">
+                        <TableCell colSpan={12} className="text-center py-12">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
                             <Package2 className="h-12 w-12 opacity-50" />
                             <p className="text-lg font-medium">No products found</p>
@@ -612,6 +990,14 @@ function InventoryContent() {
                           key={product._id}
                           className={`hover:bg-muted/50 transition-colors ${index % 2 === 0 ? 'bg-background' : 'bg-muted/20'}`}
                         >
+                          <TableCell className="border-r">
+                            <input
+                              type="checkbox"
+                              checked={selectedProducts.includes(product._id)}
+                              onChange={() => toggleProductSelection(product._id)}
+                              className="h-4 w-4 cursor-pointer"
+                            />
+                          </TableCell>
                           <TableCell className="font-medium border-r">
                             {product.country ? (
                               <Badge variant="outline" className="font-medium">
@@ -682,10 +1068,22 @@ function InventoryContent() {
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1">
-                              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-blue-50 dark:hover:bg-blue-950" title="Edit product">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 hover:bg-blue-50 dark:hover:bg-blue-950" 
+                                title="Edit product"
+                                onClick={() => handleEdit(product)}
+                              >
                                 <Edit className="h-4 w-4 text-blue-600" />
                               </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-red-50 dark:hover:bg-red-950" title="Delete product">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 hover:bg-red-50 dark:hover:bg-red-950" 
+                                title="Delete product"
+                                onClick={() => handleDeleteClick(product)}
+                              >
                                 <Trash2 className="h-4 w-4 text-red-600" />
                               </Button>
                             </div>

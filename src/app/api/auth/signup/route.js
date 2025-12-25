@@ -92,16 +92,31 @@ export async function POST(request) {
       });
     }
 
-    // If account type is public vendor, create public vendor entry
-    if (accountType === 'public_vendor') {
+    // If account type is public vendor, create public vendor entry with pending approval
+    if (accountType === 'public_vendor' && !vendorInvite) {
       await Vendor.create({
         name: name,
         email: email,
         vendorType: 'public',
         publicVendorUserId: user._id,
         description: 'Public marketplace vendor',
-        isActive: true
+        approvalStatus: 'pending',
+        status: 'pending',
+        isActive: false
       });
+      
+      return NextResponse.json({
+        message: 'Registration successful! Your account is pending approval by the administrator. You will be able to sign in once approved.',
+        user: {
+          id: user._id,
+          email: user.email,
+          name: user.name,
+          accountType: user.accountType,
+          role: user.role,
+          membershipPlan: user.membershipPlan
+        },
+        pendingApproval: true
+      }, { status: 201 });
     }
 
     return NextResponse.json({

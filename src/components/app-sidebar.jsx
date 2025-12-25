@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
+import Image from "next/image";
 import { IconBox, IconCamera, IconChartBar, IconDashboard, IconDatabase, IconFileAi, IconFileDescription, IconFileWord, IconFolder, IconHelp, IconInnerShadowTop, IconListDetails, IconMenuOrder, IconPackage, IconReport, IconSearch, IconSettings, IconUsers } from "@tabler/icons-react";
 
 import { NavDocuments } from "@/components/nav-documents";
@@ -71,22 +72,30 @@ export function AppSidebar({ ...props }) {
     avatar: session?.user?.image || "/avatars/default.jpg",
   };
 
+  // Add Vendor Approvals page for Master Admin
+  const navItems = [...data.navMain];
+  if (session?.user?.role === 'master_admin') {
+    navItems.push({
+      title: "Vendor Approvals",
+      url: "/dashboard/vendor-approvals",
+      icon: IconUsers,
+    });
+  }
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
-      <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild className="data-[slot=sidebar-menu-button]:p-2 data-[slot=sidebar-menu-button]:h-14">
-              <a href="/dashboard">
-                <IconInnerShadowTop className="size-7 text-primary" />
-                <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">eBay BMS</span>
-              </a>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+      <SidebarHeader className="border-b-0 bg-transparent">
+        <a href="/dashboard" className="block px-4 py-4">
+          <img 
+            src="/genie-logo.png" 
+            alt="GenieBMS Logo" 
+            className="w-full h-auto object-contain"
+            style={{ maxHeight: '70px' }}
+          />
+        </a>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={navItems} />
         {/* <NavDocuments items={data.navTeam} /> */}
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>

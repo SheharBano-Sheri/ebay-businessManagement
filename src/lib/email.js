@@ -42,7 +42,7 @@ export async function sendTeamInvitationEmail({ to, name, inviterName, inviterEm
               <div class="content">
                 <p>Hi <strong>${name}</strong>,</p>
                 
-                <p><strong>${inviterName}</strong> (${inviterEmail}) has invited you to join their team on eBay Business Management System.</p>
+                <p><strong>${inviterName}</strong> (${inviterEmail}) has invited you to join their team on Genie Business Management System.</p>
                 
                 <div class="info-box">
                   <p><strong>Your Role:</strong> ${role.charAt(0).toUpperCase() + role.slice(1)}</p>
@@ -201,7 +201,7 @@ export async function sendVendorInvitationEmail({ to, name, businessName, invite
     }
 
     const senderEmail = inviterEmail;
-    const senderName = inviterName || process.env.APP_NAME || 'eBay BMS';
+    const senderName = inviterName || process.env.APP_NAME || 'GenieBMS';
     
     const inviteLink = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/auth/signup?token=${inviteToken}&email=${encodeURIComponent(to)}&type=vendor`;
     
@@ -212,7 +212,7 @@ export async function sendVendorInvitationEmail({ to, name, businessName, invite
       const { data, error } = await resend.emails.send({
         from: `${senderName} <${senderEmail}>`,
         to,
-        subject: `You've been invited to join eBay BMS Marketplace`,
+        subject: `You've been invited to join GenieBMS Marketplace`,
         html: `
           <!DOCTYPE html>
           <html>
@@ -310,7 +310,7 @@ If you didn't expect this invitation, you can safely ignore this email.
       from: `"${senderName}" <${senderEmail}>`,
       replyTo: senderEmail,
       to,
-      subject: `You've been invited to join eBay BMS Marketplace`,
+      subject: `You've been invited to join GenieBMS Marketplace`,
       html: `
         <!DOCTYPE html>
         <html>

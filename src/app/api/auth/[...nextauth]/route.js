@@ -35,6 +35,19 @@ export const authOptions = {
             throw new Error('Account is inactive');
           }
 
+          // Check if public vendor is approved
+          if (user.role === 'public_vendor') {
+            const vendor = await connectDB().then(() => 
+              require('@/models/Vendor').default.findOne({ publicVendorUserId: user._id })
+            );
+            if (vendor && vendor.approvalStatus === 'pending') {
+              throw new Error('Your vendor account is pending approval by the administrator');
+            }
+            if (vendor && vendor.approvalStatus === 'rejected') {
+              throw new Error('Your vendor account application has been rejected');
+            }
+          }
+
           return {
             id: user._id.toString(),
             email: user.email,

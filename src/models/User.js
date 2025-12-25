@@ -23,7 +23,7 @@ const UserSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['owner', 'team_member', 'public_vendor'],
+    enum: ['owner', 'team_member', 'public_vendor', 'master_admin'],
     default: 'owner'
   },
   membershipPlan: {

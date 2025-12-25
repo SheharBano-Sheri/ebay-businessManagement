@@ -1,0 +1,6 @@
+<!-- GenieBMS Logo Placeholder - Replace with actual logo -->
+<svg width="200" height="60" xmlns="http://www/2000/svg">
+  <text x="10" y="40" font-family="Arial" font-size="32" font-weight="bold" fill="#1E6F68">Genie</text>
+  <text x="120" y="40" font-family="Arial" font-size="32" font-weight="bold" fill="#FF8C00">BMS</text>
+  <text x="10" y="55" font-family="Arial" font-size="10" fill="#555">Business Management System</text>
+</svg>

@@ -1,0 +1,1 @@
+﻿IMPORTANT: Please manually copy your GenieBMS logo image to this location as 'genie-logo.png'

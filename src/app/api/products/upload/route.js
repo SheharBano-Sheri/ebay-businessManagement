@@ -7,11 +7,15 @@ import Vendor from '@/models/Vendor';
 
 export async function POST(request) {
   try {
+    console.log('=== CSV Upload Started ===');
     const session = await getServerSession(authOptions);
     
     if (!session) {
+      console.log('No session found');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    console.log('User:', session.user.email, 'AdminId:', session.user.adminId);
 
     await connectDB();
 
@@ -19,15 +23,23 @@ export async function POST(request) {
     const file = formData.get('file');
     
     if (!file) {
+      console.log('No file in form data');
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
+
+    console.log('File received:', file.name, file.size, 'bytes');
 
     const text = await file.text();
     const lines = text.split('\n').filter(line => line.trim());
     
+    console.log('Total lines:', lines.length);
+    
     if (lines.length < 2) {
+      console.log('CSV file is empty or has no data rows');
       return NextResponse.json({ error: 'CSV file is empty or invalid' }, { status: 400 });
     }
+
+    console.log('Header:', lines[0]);
 
     // Skip header row
     const dataLines = lines.slice(1);
@@ -150,7 +162,7 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Upload products error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error: ' + error.message }, { status: 500 });
   }
 }
 

@@ -29,6 +29,11 @@ const VendorSchema = new mongoose.Schema({
     enum: ['pending', 'active', 'inactive'],
     default: 'active'
   },
+  approvalStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'approved'
+  },
   inviteToken: {
     type: String,
     unique: true,

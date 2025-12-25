@@ -61,7 +61,7 @@ export default function SignInPage() {
             </div>
           </div>
           <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
-          <CardDescription>Sign in to your Ebay-BMS account</CardDescription>
+          <CardDescription>Sign in to your GenieBMS account</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

@@ -1,8 +1,8 @@
-# Ebay-BMS – Product Requirement Plan
+# GenieBMS – Product Requirement Plan
 
 ## 1. Overview
 
-Ebay-BMS is a **business management dashboard** designed primarily for eBay sellers. It enables users to manage inventory, orders, vendors, payments, teams, and analytics in a single web-based system.
+GenieBMS is a **business management dashboard** designed for online sellers. It enables users to manage inventory, orders, vendors, payments, teams, and analytics in a single web-based system.
 
 The system supports **multi-tenant usage**, **team-based access control**, **vendor marketplaces**, and **private product catalogs**, with clear ownership and audit trails.
 

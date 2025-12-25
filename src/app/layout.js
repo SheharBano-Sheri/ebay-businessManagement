@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "Ebay BMS",
-  description: "Ebay Business Management System",
+  title: "GenieBMS",
+  description: "Genie Business Management System",
 };
 
 export default function RootLayout({ children }) {

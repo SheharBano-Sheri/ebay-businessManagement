@@ -20,7 +20,7 @@ export async function GET(request) {
 
     if (type === 'template') {
       // Return CSV template
-      const csvTemplate = 'Country,SKU,Product Name,Description,Type,Vendor,Stock Quantity,Unit Cost,Listing URL\n' +
+      const csvTemplate = 'Country,SKU,Name,Description,Type,Vendor,Stock,Unit Cost,Listing URL\n' +
                           'USA,SAMPLE-001,Sample Product,"Product description here",Electronics,Vendor Name,100,29.99,https://example.com/product';
       
       return new NextResponse(csvTemplate, {
@@ -37,7 +37,7 @@ export async function GET(request) {
         .sort({ createdAt: -1 });
 
       // Generate CSV from products
-      let csv = 'Country,SKU,Product Name,Description,Type,Vendor,Stock Quantity,Unit Cost,Listing URL\n';
+      let csv = 'Country,SKU,Name,Description,Type,Vendor,Stock,Unit Cost,Listing URL\n';
       
       products.forEach(product => {
         const row = [

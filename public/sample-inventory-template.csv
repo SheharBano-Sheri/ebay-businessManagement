@@ -1,0 +1,5 @@
+Country,SKU,Name,Description,Type,Vendor,Stock,Unit Cost,Listing URL
+USA,PROD-001,Apple iPhone 15 Pro,Latest iPhone model with A17 chip,Electronics,TechSupply Inc,50,999.99,https://ebay.com/item/12345
+UK,PROD-002,Samsung Galaxy S24,Flagship Android smartphone,Electronics,TechSupply Inc,30,899.00,https://ebay.com/item/12346
+Canada,PROD-003,Sony WH-1000XM5,Noise cancelling headphones,Electronics,AudioWorld,75,349.99,https://ebay.com/item/12347
+Germany,PROD-004,Dell XPS 15 Laptop,High-performance business laptop,Electronics,TechSupply Inc,20,1499.00,https://ebay.com/item/12348
