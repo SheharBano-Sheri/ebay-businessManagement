@@ -90,7 +90,10 @@ export default function TeamPage() {
       const data = await response.json();
 
       if (response.ok) {
-        toast.success('Team member invited successfully!');
+        toast.success(data.emailSent 
+          ? 'Team member invited! An email has been sent with signup instructions.' 
+          : 'Team member invited! Please share the signup link manually.'
+        );
         setIsInviteOpen(false);
         setInviteForm({
           email: '',
@@ -342,7 +345,7 @@ export default function TeamPage() {
 
             {/* Invite Member Dialog */}
             <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
-              <DialogContent>
+              <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Invite Team Member</DialogTitle>
                   <DialogDescription>

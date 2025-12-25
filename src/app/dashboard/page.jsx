@@ -12,6 +12,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { PieChartsBreakdown } from "@/components/pie-charts-breakdown";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Select,
   SelectContent,
@@ -19,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DollarSign, TrendingUp, Package, ShoppingCart } from "lucide-react";
+import { DollarSign, TrendingUp, Package, ShoppingCart, Users } from "lucide-react";
 
 import data from "./data.json";
 
@@ -30,6 +31,7 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [accounts, setAccounts] = useState([]);
   const [exchangeRates, setExchangeRates] = useState({ USD: 1, GBP: 0.79, EUR: 0.92 });
+  const [vendorNotification, setVendorNotification] = useState(null);
   
   // Filter states
   const [startDate, setStartDate] = useState("");
@@ -48,8 +50,11 @@ export default function Page() {
       fetchAccounts();
       fetchExchangeRates();
       fetchAnalytics();
+      if (session?.user?.role === 'public_vendor') {
+        fetchVendorNotifications();
+      }
     }
-  }, [status, startDate, endDate, selectedAccount]);
+  }, [status, startDate, endDate, selectedAccount, session]);
 
   const fetchAccounts = async () => {
     try {
@@ -103,6 +108,18 @@ export default function Page() {
     }
   };
 
+  const fetchVendorNotifications = async () => {
+    try {
+      const response = await fetch("/api/vendors/notifications");
+      const data = await response.json();
+      if (response.ok && data.followerCount > 0) {
+        setVendorNotification(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch vendor notifications");
+    }
+  };
+
   const formatCurrency = (amount) => {
     const convertedAmount = (amount || 0) * (exchangeRates[currency] || 1);
     return new Intl.NumberFormat("en-US", {
@@ -137,6 +154,16 @@ export default function Page() {
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
               
+              {/* Vendor Notification Banner */}
+              {vendorNotification && (
+                <Alert className="bg-primary/10 border-primary/20">
+                  <Users className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>{vendorNotification.followerCount}</strong> {vendorNotification.followerCount === 1 ? 'user has' : 'users have'} added you as a vendor!
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* Filters Bar */}
               <Card className="p-4">
                 <div className="flex items-center justify-between flex-wrap gap-4">

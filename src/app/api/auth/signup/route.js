@@ -62,6 +62,7 @@ export async function POST(request) {
       role: vendorInvite ? 'public_vendor' : (invitation ? invitation.role : (accountType === 'public_vendor' ? 'public_vendor' : 'owner')),
       membershipPlan: (invitation || vendorInvite) ? 'invited' : (accountType === 'public_vendor' ? 'personal' : membershipPlan || 'personal'),
       adminId: invitation ? invitation.adminId : null,
+      permissions: invitation ? invitation.permissions : null,
       membershipStart: new Date(),
       membershipEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // 1 year
     });

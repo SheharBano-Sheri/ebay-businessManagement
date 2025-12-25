@@ -79,8 +79,82 @@ export function AppSidebar({ ...props }) {
     avatar: session?.user?.image || "/avatars/default.jpg",
   };
 
+  // Helper function to check if user has access to a module
+  const hasAccess = (module) => {
+    // Owners and master admins have full access
+    if (session?.user?.role === 'owner' || session?.user?.role === 'master_admin') {
+      return true;
+    }
+    
+    // Team members need to check permissions
+    if (session?.user?.permissions) {
+      const modulePerms = session.user.permissions[module];
+      return modulePerms && modulePerms.length > 0;
+    }
+    
+    return false;
+  };
+
+  // Build navigation based on user permissions
+  let navItems = [
+    {
+      title: "Dashboard",
+      url: "/dashboard",
+      icon: IconDashboard,
+    }
+  ];
+
+  // Add items based on permissions
+  if (hasAccess('orders')) {
+    navItems.push({
+      title: "Orders",
+      url: "/dashboard/orders",
+      icon: IconPackage,
+    });
+  }
+
+  if (hasAccess('inventory')) {
+    navItems.push({
+      title: "Inventory",
+      url: "/dashboard/inventory",
+      icon: IconBox,
+    });
+  }
+
+  if (hasAccess('vendors')) {
+    navItems.push({
+      title: "Vendors",
+      url: "/dashboard/vendors",
+      icon: IconUsers,
+    });
+  }
+
+  if (hasAccess('accounts')) {
+    navItems.push({
+      title: "Accounts",
+      url: "/dashboard/accounts",
+      icon: IconDatabase,
+    });
+  }
+
+  if (hasAccess('payments')) {
+    navItems.push({
+      title: "Payments",
+      url: "/dashboard/payments",
+      icon: IconChartBar,
+    });
+  }
+
+  // Only owners can see Team management
+  if (session?.user?.role === 'owner' || hasAccess('team')) {
+    navItems.push({
+      title: "Team",
+      url: "/dashboard/team",
+      icon: IconUsers,
+    });
+  }
+
   // Add Vendor Approvals page for Master Admin
-  const navItems = [...data.navMain];
   if (session?.user?.role === 'master_admin') {
     navItems.push({
       title: "Vendor Approvals",

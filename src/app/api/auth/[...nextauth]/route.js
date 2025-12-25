@@ -55,7 +55,8 @@ export const authOptions = {
             accountType: user.accountType,
             role: user.role,
             membershipPlan: user.membershipPlan,
-            adminId: user.adminId?.toString() || user._id.toString()
+            adminId: user.adminId?.toString() || user._id.toString(),
+            permissions: user.permissions
           };
         } catch (error) {
           throw new Error(error.message);
@@ -71,6 +72,7 @@ export const authOptions = {
         token.role = user.role;
         token.membershipPlan = user.membershipPlan;
         token.adminId = user.adminId;
+        token.permissions = user.permissions;
       }
       return token;
     },
@@ -81,6 +83,7 @@ export const authOptions = {
         session.user.role = token.role;
         session.user.membershipPlan = token.membershipPlan;
         session.user.adminId = token.adminId;
+        session.user.permissions = token.permissions;
       }
       return session;
     }

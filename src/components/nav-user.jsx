@@ -1,6 +1,7 @@
 "use client"
 
 import { signOut } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import {
   IconCreditCard,
   IconDotsVertical,
@@ -34,6 +35,11 @@ export function NavUser({
   user
 }) {
   const { isMobile } = useSidebar()
+  const router = useRouter()
+
+  const handleNavigateToSettings = (tab) => {
+    router.push(`/dashboard/settings?tab=${tab}`)
+  }
 
   return (
     <SidebarMenu>
@@ -77,15 +83,15 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleNavigateToSettings('account')}>
                 <IconUserCircle />
                 Account
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleNavigateToSettings('billing')}>
                 <IconCreditCard />
                 Billing
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleNavigateToSettings('notifications')}>
                 <IconNotification />
                 Notifications
               </DropdownMenuItem>

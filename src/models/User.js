@@ -43,6 +43,14 @@ const UserSchema = new mongoose.Schema({
     ref: 'User',
     // For team members, this references their admin
   },
+  permissions: {
+    orders: [String],
+    inventory: [String],
+    vendors: [String],
+    accounts: [String],
+    payments: [String],
+    team: [String]
+  },
   isActive: {
     type: Boolean,
     default: true

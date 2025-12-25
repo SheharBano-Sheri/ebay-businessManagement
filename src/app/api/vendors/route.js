@@ -18,11 +18,14 @@ export async function GET(request) {
     const type = searchParams.get('type'); // public, private, virtual
     const adminId = session.user.adminId;
 
+    const userId = session.user.id; // Get the actual user ID
     let query = {};
     
     if (type === 'public') {
       query.vendorType = 'public';
       query.isActive = true;
+      // Exclude user's own public vendor from marketplace
+      query.publicVendorUserId = { $ne: userId };
     } else if (type === 'private') {
       query.vendorType = 'private';
       query.adminId = adminId;
@@ -42,7 +45,17 @@ export async function GET(request) {
 
     const vendors = await Vendor.find(query).sort({ createdAt: -1 });
 
-    return NextResponse.json({ vendors }, { status: 200 });
+    // Add follower count for public vendors and check if current user added them
+    const vendorsWithMeta = vendors.map(vendor => {
+      const vendorObj = vendor.toObject();
+      if (vendor.vendorType === 'public') {
+        vendorObj.followerCount = vendor.addedByUsers?.length || 0;
+        vendorObj.isAddedByCurrentUser = vendor.addedByUsers?.includes(adminId) || false;
+      }
+      return vendorObj;
+    });
+
+    return NextResponse.json({ vendors: vendorsWithMeta }, { status: 200 });
   } catch (error) {
     console.error('Get vendors error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -60,13 +73,38 @@ export async function POST(request) {
     await connectDB();
     const body = await request.json();
 
-    const { name, email, phone, website, vendorType, description, notes, address } = body;
+    const { name, email, phone, website, vendorType, description, notes, address, linkedVendorId } = body;
 
+    const adminId = session.user.adminId;
+
+    // Handle adding an existing public vendor to user's account
+    if (linkedVendorId) {
+      const publicVendor = await Vendor.findById(linkedVendorId);
+      
+      if (!publicVendor || publicVendor.vendorType !== 'public') {
+        return NextResponse.json({ error: 'Public vendor not found' }, { status: 404 });
+      }
+
+      // Check if user already added this vendor
+      if (publicVendor.addedByUsers && publicVendor.addedByUsers.includes(adminId)) {
+        return NextResponse.json({ error: 'You have already added this vendor' }, { status: 400 });
+      }
+
+      // Add user to the vendor's addedByUsers list
+      publicVendor.addedByUsers = publicVendor.addedByUsers || [];
+      publicVendor.addedByUsers.push(adminId);
+      await publicVendor.save();
+
+      return NextResponse.json({ 
+        message: 'Vendor added to your account',
+        vendor: publicVendor 
+      }, { status: 200 });
+    }
+
+    // Create new vendor (existing logic)
     if (!name || !vendorType) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
-
-    const adminId = session.user.adminId;
 
     const vendor = await Vendor.create({
       name,
@@ -78,7 +116,8 @@ export async function POST(request) {
       description,
       notes,
       address,
-      isActive: true
+      isActive: true,
+      addedByUsers: []
     });
 
     return NextResponse.json({ vendor }, { status: 201 });

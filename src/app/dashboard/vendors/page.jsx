@@ -42,20 +42,24 @@ export default function VendorsPage() {
     try {
       setLoading(true);
       
-      // Fetch public vendors
+      // Fetch public vendors (marketplace)
       const publicResponse = await fetch("/api/vendors?type=public");
       const publicData = await publicResponse.json();
       
-      // Fetch my vendors (private + virtual)
-      const myResponse = await fetch("/api/vendors?type=");
-      const myData = await myResponse.json();
+      // Fetch all vendors
+      const allResponse = await fetch("/api/vendors");
+      const allData = await allResponse.json();
       
       if (publicResponse.ok) {
+        // Only show public vendors that haven't been added yet
         setPublicVendors(publicData.vendors.filter(v => v.vendorType === 'public'));
       }
       
-      if (myResponse.ok) {
-        setMyVendors(myData.vendors.filter(v => v.vendorType !== 'public'));
+      if (allResponse.ok) {
+        // Show private, virtual vendors AND public vendors that user has added
+        setMyVendors(allData.vendors.filter(v => 
+          v.vendorType !== 'public' || v.isAddedByCurrentUser === true
+        ));
       }
     } catch (error) {
       toast.error("Failed to fetch vendors");
@@ -214,14 +218,30 @@ export default function VendorsPage() {
                           {vendor.website && (
                             <p className="text-sm text-primary mt-2">{vendor.website}</p>
                           )}
+                          {vendor.followerCount > 0 && (
+                            <p className="text-xs text-muted-foreground mt-3">
+                              {vendor.followerCount} {vendor.followerCount === 1 ? 'user has' : 'users have'} added this vendor
+                            </p>
+                          )}
                         </CardContent>
                         <CardFooter>
                           <Button
                             className="w-full"
                             onClick={() => addVendorToAccount(vendor._id)}
+                            disabled={vendor.isAddedByCurrentUser}
+                            variant={vendor.isAddedByCurrentUser ? "secondary" : "default"}
                           >
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add to My Vendors
+                            {vendor.isAddedByCurrentUser ? (
+                              <>
+                                <CheckCircle className="mr-2 h-4 w-4" />
+                                Already Added
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="mr-2 h-4 w-4" />
+                                Add to My Vendors
+                              </>
+                            )}
                           </Button>
                         </CardFooter>
                       </Card>
@@ -278,17 +298,10 @@ export default function VendorsPage() {
                             </div>
                           )}
                         </CardContent>
-                        <CardFooter className="gap-2">
+                        <CardFooter>
                           <Button 
                             variant="outline" 
-                            className="flex-1"
-                            onClick={() => handleEditVendor(vendor)}
-                          >
-                            Edit
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            className="flex-1"
+                            className="w-full"
                             onClick={() => handleViewProducts(vendor._id)}
                           >
                             View Products

@@ -53,6 +53,11 @@ const VendorSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
+  // Track which users added this public vendor to their account
+  addedByUsers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   description: {
     type: String
   },
