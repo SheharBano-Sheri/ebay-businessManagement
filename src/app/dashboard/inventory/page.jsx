@@ -151,6 +151,7 @@ function InventoryContent() {
       const data = await response.json();
       
       if (response.ok) {
+        // Show all vendors (API already filters to user's vendors)
         setVendors(data.vendors);
       }
     } catch (error) {
@@ -188,11 +189,13 @@ function InventoryContent() {
           listingUrl: "",
           currency: "USD",
         });
-        fetchProducts();
+        // Refresh products list
+        await fetchProducts();
       } else {
         toast.error(data.error || "Failed to add product");
       }
     } catch (error) {
+      console.error("Add product error:", error);
       toast.error("An error occurred while adding product");
     }
   };
@@ -988,7 +991,13 @@ function InventoryContent() {
                       filteredProducts.map((product, index) => (
                         <TableRow 
                           key={product._id}
-                          className={`hover:bg-muted/50 transition-colors ${index % 2 === 0 ? 'bg-background' : 'bg-muted/20'}`}
+                          className={`hover:bg-muted/50 transition-colors ${
+                            product.vendorId?.vendorType === 'public' 
+                              ? product.isApproved 
+                                ? 'bg-green-50 dark:bg-green-950/20 hover:bg-green-100 dark:hover:bg-green-900/30' 
+                                : 'bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-900/30'
+                              : index % 2 === 0 ? 'bg-background' : 'bg-muted/20'
+                          }`}
                         >
                           <TableCell className="border-r">
                             <input
@@ -1034,6 +1043,18 @@ function InventoryContent() {
                                 <Badge variant="outline" className="text-xs capitalize">
                                   {product.vendorId.vendorType}
                                 </Badge>
+                              )}
+                              {/* Show approval status for public vendor products */}
+                              {product.vendorId?.vendorType === 'public' && (
+                                product.isApproved ? (
+                                  <Badge variant="success" className="text-xs">
+                                    ✓ Approved
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="warning" className="text-xs">
+                                    ⏳ Pending Approval
+                                  </Badge>
+                                )
                               )}
                             </div>
                           </TableCell>

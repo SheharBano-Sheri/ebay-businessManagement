@@ -37,6 +37,7 @@ function VendorApprovalsContent() {
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
   const [actionType, setActionType] = useState(null);
   const [processing, setProcessing] = useState(false);
+  const [autoApproveInventory, setAutoApproveInventory] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -58,7 +59,7 @@ function VendorApprovalsContent() {
   const fetchPendingVendors = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/admin/pending-vendors");
+      const response = await fetch("/api/admin/vendor-approvals");
       const data = await response.json();
 
       if (response.ok) {
@@ -77,6 +78,7 @@ function VendorApprovalsContent() {
   const handleAction = (vendor, action) => {
     setSelectedVendor(vendor);
     setActionType(action);
+    setAutoApproveInventory(false);
     setActionDialogOpen(true);
   };
 
@@ -85,7 +87,7 @@ function VendorApprovalsContent() {
 
     try {
       setProcessing(true);
-      const response = await fetch("/api/admin/approve-vendor", {
+      const response = await fetch("/api/admin/vendor-approvals", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -93,6 +95,7 @@ function VendorApprovalsContent() {
         body: JSON.stringify({
           vendorId: selectedVendor._id,
           action: actionType,
+          autoApproveInventory: actionType === "approve" ? autoApproveInventory : undefined,
         }),
       });
 
@@ -280,6 +283,26 @@ function VendorApprovalsContent() {
                 : `Are you sure you want to reject "${selectedVendor?.name}"? They will not be able to sign in.`}
             </DialogDescription>
           </DialogHeader>
+          
+          {actionType === "approve" && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoApproveInventory}
+                  onChange={(e) => setAutoApproveInventory(e.target.checked)}
+                  className="w-4 h-4 rounded"
+                />
+                <div>
+                  <p className="font-semibold text-gray-900">Auto-Approve Inventory</p>
+                  <p className="text-sm text-gray-600">
+                    Automatically approve products added by this vendor, saving review time
+                  </p>
+                </div>
+              </label>
+            </div>
+          )}
+          
           <DialogFooter>
             <Button
               variant="outline"

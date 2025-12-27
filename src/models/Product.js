@@ -55,6 +55,17 @@ const ProductSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  isApproved: {
+    type: Boolean,
+    default: false
+  },
+  approvedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  approvedAt: {
+    type: Date
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -65,7 +76,6 @@ const ProductSchema = new mongoose.Schema({
   }
 });
 
-// Index for fast lookups
 ProductSchema.index({ adminId: 1, sku: 1 });
 
 export default mongoose.models.Product || mongoose.model('Product', ProductSchema);

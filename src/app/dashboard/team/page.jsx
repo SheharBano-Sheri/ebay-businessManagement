@@ -48,6 +48,7 @@ export default function TeamPage() {
       payments: []
     }
   });
+  const [isPricingOpen, setIsPricingOpen] = useState(false);
 
   useEffect(() => {
     if (session?.user) {
@@ -266,8 +267,8 @@ export default function TeamPage() {
                         Upgrade to Pro or Enterprise to invite team members and manage permissions.
                       </p>
                       <div className="flex gap-2">
-                        <Button>Upgrade to Pro</Button>
-                        <Button variant="outline">View Plans</Button>
+                        <Button onClick={() => setIsPricingOpen(true)}>Upgrade to Enterprise</Button>
+                        <Button variant="outline" onClick={() => setIsPricingOpen(true)}>View Plans</Button>
                       </div>
                     </div>
                   </div>
@@ -709,6 +710,134 @@ export default function TeamPage() {
           </div>
         </div>
       </SidebarInset>
+
+      {/* Pricing Dialog */}
+      <Dialog open={isPricingOpen} onOpenChange={setIsPricingOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Choose Your Plan</DialogTitle>
+            <DialogDescription>
+              Select the plan that best fits your business needs
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid md:grid-cols-3 gap-4 py-4">
+            {/* Personal Plan */}
+            <Card className={currentPlan === 'personal' ? 'border-primary' : ''}>
+              <CardHeader>
+                <CardTitle>Personal</CardTitle>
+                <div className="text-3xl font-bold">Free</div>
+                <CardDescription>For individual sellers</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-500">✓</span>
+                    <span>Solo usage only</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-500">✓</span>
+                    <span>0 team members</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-500">✓</span>
+                    <span>Add private vendors</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-500">✓</span>
+                    <span>Link public vendors</span>
+                  </li>
+                </ul>
+                {currentPlan === 'personal' && (
+                  <Badge className="mt-4 w-full justify-center">Current Plan</Badge>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Enterprise Plan */}
+            <Card className={currentPlan === 'enterprise' ? 'border-primary' : ''}>
+              <CardHeader>
+                <CardTitle>Enterprise</CardTitle>
+                <div className="text-3xl font-bold">$49<span className="text-lg font-normal">/mo</span></div>
+                <CardDescription>For growing businesses</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-500">✓</span>
+                    <span>Up to 10 active team members</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-500">✓</span>
+                    <span>Role-based permissions</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-500">✓</span>
+                    <span>Unlimited vendors</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-500">✓</span>
+                    <span>Priority support</span>
+                  </li>
+                </ul>
+                {currentPlan === 'enterprise' ? (
+                  <Badge className="mt-4 w-full justify-center">Current Plan</Badge>
+                ) : (
+                  <Button className="mt-4 w-full" onClick={() => {
+                    toast.info('Please contact support to upgrade to Enterprise plan');
+                    setIsPricingOpen(false);
+                  }}>
+                    Upgrade to Enterprise
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Premium Plan */}
+            <Card className={currentPlan === 'premium' ? 'border-primary' : ''}>
+              <CardHeader>
+                <CardTitle>Premium</CardTitle>
+                <div className="text-3xl font-bold">Custom</div>
+                <CardDescription>For large enterprises</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-500">✓</span>
+                    <span>Unlimited team members</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-500">✓</span>
+                    <span>Advanced permissions</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-500">✓</span>
+                    <span>Dedicated support</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-green-500">✓</span>
+                    <span>Custom integrations</span>
+                  </li>
+                </ul>
+                {currentPlan === 'premium' ? (
+                  <Badge className="mt-4 w-full justify-center">Current Plan</Badge>
+                ) : (
+                  <Button className="mt-4 w-full" variant="outline" onClick={() => {
+                    toast.info('Please contact us for Premium plan pricing');
+                    setIsPricingOpen(false);
+                  }}>
+                    Contact for Pricing
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPricingOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SidebarProvider>
   );
 }

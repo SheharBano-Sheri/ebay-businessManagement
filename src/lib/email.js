@@ -6,9 +6,9 @@ export async function sendTeamInvitationEmail({ to, name, inviterName, inviterEm
       return { success: true, skipped: true, message: 'Email service not configured' };
     }
 
-    // Use the owner's email as the sender
-    const senderEmail = inviterEmail;
-    const senderName = inviterName || process.env.APP_NAME || 'eBay BMS';
+    // Use the configured email as the sender (e.g., Onboarding@geniebms.com)
+    const senderEmail = process.env.EMAIL_USER || inviterEmail;
+    const senderName = process.env.APP_NAME || 'Genie Business Management System';
     
     const inviteLink = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/auth/signup?token=${inviteToken}&email=${encodeURIComponent(to)}`;
     
@@ -111,7 +111,7 @@ If you didn't expect this invitation, you can safely ignore this email.
 
     const mailOptions = {
       from: `"${senderName}" <${senderEmail}>`,
-      replyTo: senderEmail,
+      replyTo: inviterEmail, // Reply goes to the admin who invited
       to,
       subject: `You've been invited to join ${inviterName}'s team`,
       html: `
@@ -200,8 +200,8 @@ export async function sendVendorInvitationEmail({ to, name, businessName, invite
       return { success: true, skipped: true, message: 'Email service not configured' };
     }
 
-    const senderEmail = inviterEmail;
-    const senderName = inviterName || process.env.APP_NAME || 'GenieBMS';
+    const senderEmail = process.env.EMAIL_USER || inviterEmail;
+    const senderName = process.env.APP_NAME || 'Genie Business Management System';
     
     const inviteLink = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/auth/signup?token=${inviteToken}&email=${encodeURIComponent(to)}&type=vendor`;
     
@@ -308,7 +308,7 @@ If you didn't expect this invitation, you can safely ignore this email.
 
     const mailOptions = {
       from: `"${senderName}" <${senderEmail}>`,
-      replyTo: senderEmail,
+      replyTo: inviterEmail, // Reply goes to the admin who invited
       to,
       subject: `You've been invited to join GenieBMS Marketplace`,
       html: `

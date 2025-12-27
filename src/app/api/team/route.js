@@ -4,6 +4,7 @@ import { authOptions } from '../auth/[...nextauth]/route';
 import connectDB from '@/lib/mongodb';
 import TeamMember from '@/models/TeamMember';
 import User from '@/models/User';
+import { sendTeamInvitationEmail } from '@/lib/email';
 
 export async function GET(request) {
   try {
@@ -50,15 +51,26 @@ export async function POST(request) {
     const membershipPlan = user.membershipPlan || 'personal';
     const planLimits = {
       personal: 0,
-      pro: 10,
-      enterprise: Infinity
+      enterprise: 10,
+      premium: Infinity  // Premium users contact for pricing if they need more than 10
     };
 
-    const currentMemberCount = await TeamMember.countDocuments({ adminId });
+    // Count only active members
+    const currentMemberCount = await TeamMember.countDocuments({ adminId, status: 'active' });
     
     if (currentMemberCount >= planLimits[membershipPlan]) {
+      if (membershipPlan === 'personal') {
+        return NextResponse.json({ 
+          error: 'Personal plan does not allow team members. Please upgrade to Enterprise or Premium plan.' 
+        }, { status: 403 });
+      } else if (membershipPlan === 'enterprise') {
+        return NextResponse.json({ 
+          error: 'Enterprise plan allows maximum 10 active team members. Please remove an existing member or upgrade to Premium plan.' 
+        }, { status: 403 });
+      }
+      // Premium users shouldn't hit this, but just in case
       return NextResponse.json({ 
-        error: `Your ${membershipPlan} plan allows maximum ${planLimits[membershipPlan]} team members. Please upgrade your plan.` 
+        error: `Your ${membershipPlan} plan limit reached. Please contact support.` 
       }, { status: 403 });
     }
 
@@ -98,15 +110,36 @@ export async function POST(request) {
 
     console.log('Team member created:', newMember._id);
 
-    // Email functionality temporarily disabled - share invite link manually
+    // Send invitation email
     const inviteLink = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/auth/signup?token=${inviteToken}&email=${encodeURIComponent(email)}`;
+    
+    const emailResult = await sendTeamInvitationEmail({
+      to: email,
+      name: name,
+      inviterName: user.name,
+      inviterEmail: user.email,
+      role: role || 'member',
+      inviteToken: inviteToken
+    });
 
-    return NextResponse.json({ 
-      message: 'Team member invited successfully. Share the signup link with them.',
-      member: newMember,
-      inviteLink: inviteLink,
-      emailSent: false
-    }, { status: 201 });
+    if (emailResult.success) {
+      console.log('✅ Invitation email sent successfully to:', email);
+      return NextResponse.json({ 
+        message: 'Team member invited successfully! Invitation email sent.',
+        member: newMember,
+        inviteLink: inviteLink,
+        emailSent: true
+      }, { status: 201 });
+    } else {
+      console.error('❌ Failed to send invitation email:', emailResult.error);
+      return NextResponse.json({ 
+        message: 'Team member created but email failed to send. Share the link manually.',
+        member: newMember,
+        inviteLink: inviteLink,
+        emailSent: false,
+        emailError: emailResult.error
+      }, { status: 201 });
+    }
 
   } catch (error) {
     console.error('Invite team member error:', error);

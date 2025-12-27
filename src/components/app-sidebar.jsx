@@ -81,8 +81,10 @@ export function AppSidebar({ ...props }) {
 
   // Helper function to check if user has access to a module
   const hasAccess = (module) => {
-    // Owners and master admins have full access
-    if (session?.user?.role === 'owner' || session?.user?.role === 'master_admin') {
+    // Owners, master admins, and public vendors have full access
+    if (session?.user?.role === 'owner' || 
+        session?.user?.role === 'master_admin' || 
+        session?.user?.role === 'public_vendor') {
       return true;
     }
     
@@ -145,12 +147,23 @@ export function AppSidebar({ ...props }) {
     });
   }
 
-  // Only owners can see Team management
-  if (session?.user?.role === 'owner' || hasAccess('team')) {
+  // Only owners and users with team permissions can see Team management
+  // Exclude public vendors from team management
+  if ((session?.user?.role === 'owner' || hasAccess('team')) && 
+      session?.user?.role !== 'public_vendor') {
     navItems.push({
       title: "Team",
       url: "/dashboard/team",
       icon: IconUsers,
+    });
+  }
+
+  // Add Inventory Approvals page for Master Admin
+  if (session?.user?.role === 'master_admin') {
+    navItems.push({
+      title: "Inventory Approvals",
+      url: "/dashboard/inventory-approvals",
+      icon: IconListDetails,
     });
   }
 

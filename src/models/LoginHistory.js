@@ -4,7 +4,10 @@ const LoginHistorySchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: false  // Can be null for failed logins where user not found
+  },
+  email: {
+    type: String  // Store email for failed login attempts
   },
   ipAddress: {
     type: String,
@@ -29,6 +32,9 @@ const LoginHistorySchema = new mongoose.Schema({
   success: {
     type: Boolean,
     default: true
+  },
+  failureReason: {
+    type: String  // Reason for failed login
   },
   sessionId: {
     type: String

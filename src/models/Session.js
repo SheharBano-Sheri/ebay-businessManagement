@@ -9,7 +9,8 @@ const SessionSchema = new mongoose.Schema({
   sessionToken: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    index: true
   },
   ipAddress: {
     type: String,
@@ -51,7 +52,6 @@ const SessionSchema = new mongoose.Schema({
 
 // Index for faster queries
 SessionSchema.index({ userId: 1, isActive: 1 });
-SessionSchema.index({ sessionToken: 1 });
 SessionSchema.index({ expiresAt: 1 });
 
 export default mongoose.models.Session || mongoose.model('Session', SessionSchema);

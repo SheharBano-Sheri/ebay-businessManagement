@@ -8,7 +8,7 @@ export async function GET(request) {
   try {
     const session = await getServerSession(authOptions);
     
-    if (!session) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -70,7 +70,7 @@ export async function DELETE(request) {
   try {
     const session = await getServerSession(authOptions);
     
-    if (!session) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -85,6 +85,7 @@ export async function DELETE(request) {
       await Session.updateMany(
         { 
           userId: session.user.id,
+          sessionToken: { $ne: session.sessionToken },
           isActive: true
         },
         { 
@@ -103,6 +104,13 @@ export async function DELETE(request) {
       
       if (!sess || sess.userId.toString() !== session.user.id) {
         return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+      }
+      
+      // Don't allow revoking current session this way
+      if (sess.sessionToken === session.sessionToken) {
+        return NextResponse.json({ 
+          error: 'Cannot revoke current session. Please use sign out.' 
+        }, { status: 400 });
       }
 
       sess.isActive = false;

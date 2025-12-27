@@ -1,23 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { Package } from "lucide-react";
+import { Package, Clock } from "lucide-react";
 
 export default function SignInPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
+  const [pendingApproval, setPendingApproval] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: ""
   });
+
+  useEffect(() => {
+    const isPending = searchParams.get('pending');
+    if (isPending === 'true') {
+      setPendingApproval(true);
+    }
+  }, [searchParams]);
 
   const handleChange = (e) => {
     setFormData({
@@ -31,9 +41,20 @@ export default function SignInPage() {
     setLoading(true);
 
     try {
+      // Get IP and user agent from server
+      const metadataResponse = await fetch('/api/auth/signin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email })
+      });
+      
+      const metadata = await metadataResponse.json();
+      
       const result = await signIn("credentials", {
         email: formData.email,
         password: formData.password,
+        ipAddress: metadata.ipAddress,
+        userAgent: metadata.userAgent,
         redirect: false
       });
 
@@ -64,6 +85,14 @@ export default function SignInPage() {
           <CardDescription>Sign in to your GenieBMS account</CardDescription>
         </CardHeader>
         <CardContent>
+          {pendingApproval && (
+            <Alert className="mb-6 border-yellow-200 bg-yellow-50">
+              <Clock className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-800">
+                Your vendor account is pending approval by the administrator. You will be able to sign in once approved. Please check back soon.
+              </AlertDescription>
+            </Alert>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>

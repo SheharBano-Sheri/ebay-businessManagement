@@ -23,12 +23,12 @@ const UserSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['owner', 'team_member', 'public_vendor', 'master_admin'],
+    enum: ['owner', 'member', 'manager', 'admin', 'team_member', 'public_vendor', 'master_admin'],
     default: 'owner'
   },
   membershipPlan: {
     type: String,
-    enum: ['personal', 'pro', 'enterprise'],
+    enum: ['personal', 'pro', 'enterprise', 'invited', 'team_member'],
     default: 'personal'
   },
   membershipStart: {
@@ -54,6 +54,14 @@ const UserSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  // For public vendors - approval status
+  vendorApprovalStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: function() {
+      return this.role === 'public_vendor' ? 'pending' : 'approved';
+    }
   },
   createdAt: {
     type: Date,

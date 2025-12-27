@@ -75,6 +75,10 @@ const VendorSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  autoApproveInventory: {
+    type: Boolean,
+    default: false
+  },
   createdAt: {
     type: Date,
     default: Date.now

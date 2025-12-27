@@ -86,7 +86,7 @@ function SignupForm() {
           email: formData.email,
           password: formData.password,
           accountType: inviteToken ? "user" : accountType,
-          membershipPlan: inviteToken ? "team_member" : (accountType === "user" ? membershipPlan : "personal"),
+          membershipPlan: inviteToken ? "invited" : (accountType === "user" ? membershipPlan : "personal"),
           inviteToken
         })
       });
@@ -94,6 +94,13 @@ function SignupForm() {
       const data = await response.json();
 
       if (response.ok) {
+        // Check if pending approval
+        if (data.pendingApproval) {
+          toast.success("Registration successful! Your account is pending approval.");
+          router.push("/auth/signin?pending=true");
+          return;
+        }
+
         toast.success("Account created successfully!");
         
         // Auto sign in

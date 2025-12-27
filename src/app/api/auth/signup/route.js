@@ -13,77 +13,62 @@ export async function POST(request) {
     const { email, password, name, accountType, membershipPlan, inviteToken } = body;
 
     // Validation
-    if (!email || !password || !name || !accountType) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
+    if (!email || !password || !name) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    // Check if this is an invitation signup
+    let invitation = null;
+    
+    if (inviteToken) {
+      invitation = await TeamMember.findOne({ inviteToken, email, status: 'pending' });
+      
+      if (!invitation) {
+        return NextResponse.json({ error: 'Invalid or expired invitation' }, { status: 400 });
+      }
     }
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
+    
     if (existingUser) {
-      return NextResponse.json(
-        { error: 'User already exists' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'User already exists' }, { status: 400 });
     }
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Check if this is an invitation signup
-    let invitation = null;
-    let vendorInvite = null;
-    
-    if (inviteToken) {
-      // Check if it's a team invitation
-      invitation = await TeamMember.findOne({ inviteToken, email, status: 'pending' });
-      
-      // If not team, check if it's a vendor invitation
-      if (!invitation) {
-        vendorInvite = await Vendor.findOne({ inviteToken, email, status: 'pending' });
-      }
-      
-      if (!invitation && !vendorInvite) {
-        return NextResponse.json(
-          { error: 'Invalid or expired invitation' },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Create user
-    const user = await User.create({
+    // Create user account
+    const userData = {
       email,
       password: hashedPassword,
       name,
-      accountType: vendorInvite ? 'public_vendor' : (invitation ? 'user' : accountType),
-      role: vendorInvite ? 'public_vendor' : (invitation ? invitation.role : (accountType === 'public_vendor' ? 'public_vendor' : 'owner')),
-      membershipPlan: (invitation || vendorInvite) ? 'invited' : (accountType === 'public_vendor' ? 'personal' : membershipPlan || 'personal'),
-      adminId: invitation ? invitation.adminId : null,
-      permissions: invitation ? invitation.permissions : null,
+      accountType: invitation ? 'user' : (accountType || 'user'),
+      role: invitation ? 'team_member' : 'owner',
+      membershipPlan: invitation ? 'invited' : (membershipPlan || 'personal'),
       membershipStart: new Date(),
-      membershipEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // 1 year
-    });
+      membershipEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      isActive: true,
+      vendorApprovalStatus: 'approved'
+    };
+    
+    // For team invitations, set admin and permissions
+    if (invitation) {
+      userData.adminId = invitation.adminId;
+      userData.permissions = invitation.permissions || {};
+    }
+    
+    const user = await User.create(userData);
 
-    // If team invitation, update team member status
+    // If team invitation, activate it
     if (invitation) {
       invitation.status = 'active';
       invitation.acceptedAt = new Date();
       await invitation.save();
     }
-    
-    // If vendor invitation, update vendor status
-    if (vendorInvite) {
-      vendorInvite.status = 'active';
-      vendorInvite.isActive = true;
-      vendorInvite.publicVendorUserId = user._id;
-      await vendorInvite.save();
-    }
 
-    // If account type is user, create a virtual vendor
-    if (accountType === 'user') {
+    // If regular user (not team member), create virtual vendor
+    if (!invitation && accountType === 'user') {
       await Vendor.create({
         name: `${name} (Self)`,
         vendorType: 'virtual',
@@ -93,35 +78,8 @@ export async function POST(request) {
       });
     }
 
-    // If account type is public vendor, create public vendor entry with pending approval
-    if (accountType === 'public_vendor' && !vendorInvite) {
-      await Vendor.create({
-        name: name,
-        email: email,
-        vendorType: 'public',
-        publicVendorUserId: user._id,
-        description: 'Public marketplace vendor',
-        approvalStatus: 'pending',
-        status: 'pending',
-        isActive: false
-      });
-      
-      return NextResponse.json({
-        message: 'Registration successful! Your account is pending approval by the administrator. You will be able to sign in once approved.',
-        user: {
-          id: user._id,
-          email: user.email,
-          name: user.name,
-          accountType: user.accountType,
-          role: user.role,
-          membershipPlan: user.membershipPlan
-        },
-        pendingApproval: true
-      }, { status: 201 });
-    }
-
     return NextResponse.json({
-      message: 'User created successfully',
+      message: 'Account created successfully',
       user: {
         id: user._id,
         email: user.email,
@@ -134,8 +92,20 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Signup error:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    if (error.errors) {
+      console.error('Validation errors:', JSON.stringify(error.errors, null, 2));
+    }
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: error.message,
+        validationErrors: error.errors ? Object.keys(error.errors).map(key => ({
+          field: key,
+          message: error.errors[key].message
+        })) : null
+      },
       { status: 500 }
     );
   }
