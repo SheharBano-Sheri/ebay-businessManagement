@@ -35,7 +35,7 @@ export async function checkPermission(module, action = 'view') {
 
     // Public vendors have limited access (not to team management)
     if (user.role === 'public_vendor') {
-      const allowedModules = ['orders', 'inventory', 'vendors', 'accounts', 'payments'];
+      const allowedModules = ['orders', 'inventory', 'vendors', 'accounts', 'payments', 'team'];
       if (allowedModules.includes(module)) {
         return { authorized: true, user, error: null };
       }

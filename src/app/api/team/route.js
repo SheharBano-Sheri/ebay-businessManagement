@@ -47,18 +47,38 @@ export async function POST(request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Check plan limits
-    const membershipPlan = user.membershipPlan || 'personal';
-    const planLimits = {
-      personal: 0,
-      enterprise: 10,
-      premium: Infinity  // Premium users contact for pricing if they need more than 10
-    };
+    
+    // 1. Define the limit based on Role OR Plan
+    let limit = 0;
+    const isPublicVendor = user.role === 'public_vendor';
 
-    // Count only active members
+    if (isPublicVendor) {
+      limit = 5; // Fixed limit for public vendors (No plan required)
+    } else {
+      // For standard users, check their membership plan
+      const membershipPlan = user.membershipPlan || 'personal';
+      const planLimits = {
+        personal: 0,
+        enterprise: 10,
+        premium: Infinity
+      };
+      limit = planLimits[membershipPlan] || 0;
+    }
+
+    // 2. Check current usage
     const currentMemberCount = await TeamMember.countDocuments({ adminId, status: 'active' });
     
-    if (currentMemberCount >= planLimits[membershipPlan]) {
+    // 3. Validate Limit
+    if (currentMemberCount >= limit) {
+      // Custom error for Public Vendor
+      if (isPublicVendor) {
+        return NextResponse.json({ 
+          error: 'Public Vendors are limited to 5 active team members.' 
+        }, { status: 403 });
+      } 
+      
+      // Standard Plan errors
+      const membershipPlan = user.membershipPlan || 'personal';
       if (membershipPlan === 'personal') {
         return NextResponse.json({ 
           error: 'Personal plan does not allow team members. Please upgrade to Enterprise or Premium plan.' 
@@ -68,9 +88,9 @@ export async function POST(request) {
           error: 'Enterprise plan allows maximum 10 active team members. Please remove an existing member or upgrade to Premium plan.' 
         }, { status: 403 });
       }
-      // Premium users shouldn't hit this, but just in case
+      
       return NextResponse.json({ 
-        error: `Your ${membershipPlan} plan limit reached. Please contact support.` 
+        error: `Your plan limit reached. Please contact support.` 
       }, { status: 403 });
     }
 

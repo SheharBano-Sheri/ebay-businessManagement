@@ -149,8 +149,9 @@ export function AppSidebar({ ...props }) {
 
   // Only owners and users with team permissions can see Team management
   // Exclude public vendors from team management
-  if ((session?.user?.role === 'owner' || hasAccess('team')) && 
-      session?.user?.role !== 'public_vendor') {
+  if (session?.user?.role === 'owner' || 
+      session?.user?.role === 'public_vendor' || 
+      hasAccess('team')) {
     navItems.push({
       title: "Team",
       url: "/dashboard/team",
