@@ -59,9 +59,7 @@ const UserSchema = new mongoose.Schema({
   vendorApprovalStatus: {
     type: String,
     enum: ['pending', 'approved', 'rejected'],
-    default: function() {
-      return this.role === 'public_vendor' ? 'pending' : 'approved';
-    }
+    default: 'approved' // Explicitly set in signup route for public vendors
   },
   createdAt: {
     type: Date,

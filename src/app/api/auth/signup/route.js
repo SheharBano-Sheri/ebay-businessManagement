@@ -68,6 +68,12 @@ export async function POST(request) {
 
     // Determine if this is a public vendor signup
     const isPublicVendor = !invitation && accountType === 'public_vendor';
+    
+    console.log('=== SIGNUP DEBUG ===');
+    console.log('Account Type:', accountType);
+    console.log('Is Public Vendor:', isPublicVendor);
+    console.log('Has Invitation:', !!invitation);
+    console.log('==================');
 
     // Create user account
     const userData = {
@@ -90,6 +96,14 @@ export async function POST(request) {
     }
     
     const user = await User.create(userData);
+    
+    console.log('=== USER CREATED ===');
+    console.log('User ID:', user._id);
+    console.log('Role:', user.role);
+    console.log('Account Type:', user.accountType);
+    console.log('Is Active:', user.isActive);
+    console.log('Vendor Approval Status:', user.vendorApprovalStatus);
+    console.log('==================');
 
     // If team invitation, activate it
     if (invitation) {

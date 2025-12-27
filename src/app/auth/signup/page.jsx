@@ -76,6 +76,7 @@ function SignupFormContent() {
     }
 
     try {
+      console.log('Signup request:', { accountType, name: formData.name, email: formData.email });
       const response = await fetch("/api/auth/signup", {
         method: "POST",
         headers: {
