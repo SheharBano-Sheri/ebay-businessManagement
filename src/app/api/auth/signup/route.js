@@ -31,8 +31,36 @@ export async function POST(request) {
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     
-    if (existingUser) {
+    // If user exists and this is NOT an invitation, return error
+    if (existingUser && !invitation) {
       return NextResponse.json({ error: 'User already exists' }, { status: 400 });
+    }
+    
+    // If user exists and this IS an invitation, check if they were a removed team member
+    if (existingUser && invitation) {
+      // Update existing user to reactivate them
+      existingUser.adminId = invitation.adminId;
+      existingUser.permissions = invitation.permissions || {};
+      existingUser.role = 'team_member';
+      existingUser.isActive = true;
+      await existingUser.save();
+      
+      // Activate the invitation
+      invitation.status = 'active';
+      invitation.acceptedAt = new Date();
+      await invitation.save();
+      
+      return NextResponse.json({
+        message: 'Account reactivated successfully',
+        user: {
+          id: existingUser._id,
+          email: existingUser.email,
+          name: existingUser.name,
+          accountType: existingUser.accountType,
+          role: existingUser.role,
+          membershipPlan: existingUser.membershipPlan
+        }
+      }, { status: 201 });
     }
 
     // Hash password

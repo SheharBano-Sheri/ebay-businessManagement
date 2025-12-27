@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import connectDB from '@/lib/mongodb';
 import TeamMember from '@/models/TeamMember';
+import User from '@/models/User';
 
 export async function PATCH(request, context) {
   try {
@@ -71,9 +72,14 @@ export async function DELETE(request, context) {
       return NextResponse.json({ error: 'Cannot remove the owner' }, { status: 403 });
     }
 
+    // Delete the team member record
     await TeamMember.deleteOne({ _id: id });
 
+    // Also delete the associated User account if it exists
+    const userDeleted = await User.deleteOne({ email: member.email, adminId });
+    
     console.log('Team member removed:', id);
+    console.log('User account deleted:', userDeleted.deletedCount > 0);
 
     return NextResponse.json({ 
       message: 'Team member removed successfully' 
