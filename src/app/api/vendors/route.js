@@ -95,7 +95,9 @@ export async function POST(request) {
 
     const { name, email, phone, website, vendorType, description, notes, address, linkedVendorId } = body;
 
-    const adminId = session.user.adminId;
+    // For regular users (owner), adminId is their own ID
+    // For team members, adminId is their admin's ID
+    const adminId = session.user.adminId || session.user.id;
 
     // Handle adding an existing public vendor to user's account
     if (linkedVendorId) {

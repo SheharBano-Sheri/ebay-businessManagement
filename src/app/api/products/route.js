@@ -18,7 +18,9 @@ export async function GET(request) {
 
     await connectDB();
 
-    const adminId = session.user.adminId;
+    // For regular users (owner), adminId is their own ID
+    // For team members, adminId is their admin's ID
+    const adminId = session.user.adminId || session.user.id;
     const { searchParams } = new URL(request.url);
     const vendorId = searchParams.get('vendorId');
 
@@ -154,17 +156,14 @@ export async function POST(request) {
 
     const { country, sku, name, description, type, vendorId, stock, unitCost, currency, images, listingUrl } = body;
 
-    console.log('Creating product with data:', { sku, name, vendorId, adminId: session.user.adminId });
+    // For regular users (owner), adminId is their own ID
+    // For team members, adminId is their admin's ID
+    const adminId = session.user.adminId || session.user.id;
+    
+    console.log('Creating product with data:', { sku, name, vendorId, adminId, userId: session.user.id });
 
     if (!sku || !name || !vendorId) {
       return NextResponse.json({ error: 'Missing required fields: sku, name, vendorId' }, { status: 400 });
-    }
-
-    const adminId = session.user.adminId;
-    
-    if (!adminId) {
-      console.error('No adminId found in session:', session.user);
-      return NextResponse.json({ error: 'Admin ID not found in session' }, { status: 400 });
     }
 
     // Check if vendor exists and get its properties

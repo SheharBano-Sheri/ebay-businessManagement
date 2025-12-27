@@ -14,7 +14,9 @@ export async function GET(request) {
 
     await connectDB();
 
-    const adminId = session.user.adminId;
+    // For regular users (owner), adminId is their own ID
+    // For team members, adminId is their admin's ID
+    const adminId = session.user.adminId || session.user.id;
 
     const payments = await Payment.find({ adminId })
       .populate('vendorId', 'name vendorType')
