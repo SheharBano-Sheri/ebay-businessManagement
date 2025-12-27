@@ -43,7 +43,12 @@ export async function POST(request) {
 
     // Skip header row
     const dataLines = lines.slice(1);
-    const adminId = session.user.adminId;
+    
+    // For regular users (owner), adminId is their own ID
+    // For team members, adminId is their admin's ID
+    const adminId = session.user.adminId || session.user.id;
+    
+    console.log('Using adminId for vendor query:', adminId);
     
     // Get all vendors for matching
     const vendors = await Vendor.find({ adminId });
