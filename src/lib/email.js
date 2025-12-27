@@ -109,15 +109,26 @@ If you didn't expect this invitation, you can safely ignore this email.
     const transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST || 'smtp.gmail.com',
       port: parseInt(process.env.EMAIL_PORT) || 587,
-      secure: false,
+      secure: false, // true for 465, false for other ports
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASSWORD,
       },
       tls: {
         rejectUnauthorized: false
-      }
+      },
+      debug: true, // Enable debug logs
+      logger: true // Log to console
     });
+
+    // Verify connection
+    try {
+      await transporter.verify();
+      console.log('✅ SMTP server connection verified');
+    } catch (verifyError) {
+      console.error('❌ SMTP verification failed:', verifyError);
+      throw new Error(`SMTP connection failed: ${verifyError.message}`);
+    }
 
     const mailOptions = {
       from: `"${senderName}" <${senderEmail}>`,
