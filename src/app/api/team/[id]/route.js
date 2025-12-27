@@ -72,17 +72,21 @@ export async function DELETE(request, context) {
       return NextResponse.json({ error: 'Cannot remove the owner' }, { status: 403 });
     }
 
-    // Delete the team member record
+    // Delete the team member record (this removes pending invitations too)
     await TeamMember.deleteOne({ _id: id });
 
-    // Also delete the associated User account if it exists
+    // Delete the associated User account if it exists (active members)
     const userDeleted = await User.deleteOne({ email: member.email, adminId });
     
     console.log('Team member removed:', id);
     console.log('User account deleted:', userDeleted.deletedCount > 0);
+    
+    // If member was still pending, the invitation is now expired (TeamMember deleted)
+    // If member was active, both User and TeamMember are deleted
+    // Either way, they cannot sign in until invited again
 
     return NextResponse.json({ 
-      message: 'Team member removed successfully' 
+      message: 'Team member removed successfully. Invitation expired.' 
     }, { status: 200 });
 
   } catch (error) {
