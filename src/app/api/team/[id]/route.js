@@ -30,11 +30,23 @@ export async function PATCH(request, context) {
       return NextResponse.json({ error: 'Cannot modify owner permissions' }, { status: 403 });
     }
 
-    // Update member
+    // Update TeamMember record
     if (role) member.role = role;
     if (permissions) member.permissions = permissions;
 
     await member.save();
+
+    // Also update the User record if the member has already accepted the invitation
+    if (member.status === 'active') {
+      const user = await User.findOne({ email: member.email, adminId });
+      
+      if (user) {
+        if (role) user.role = role === 'owner' ? 'owner' : 'team_member';
+        if (permissions) user.permissions = permissions;
+        await user.save();
+        console.log('User permissions updated:', user.email);
+      }
+    }
 
     console.log('Team member updated:', id);
 
