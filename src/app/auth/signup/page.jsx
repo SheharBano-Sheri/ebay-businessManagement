@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { BadgeCheck, Building2, User, Mail } from "lucide-react";
 
-function SignupForm() {
+function SignupFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -401,7 +401,7 @@ export default function SignupPage() {
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
       </div>
     }>
-      <SignupForm />
+      <SignupFormContent />
     </Suspense>
   );
 }
