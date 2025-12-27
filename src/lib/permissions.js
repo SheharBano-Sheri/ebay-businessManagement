@@ -21,7 +21,8 @@ export async function checkPermission(module, action = 'view') {
 
     await connectDB();
     
-    const user = await User.findOne({ email: session.user.email });
+    // Always fetch fresh user data from database to get latest permissions
+    const user = await User.findOne({ email: session.user.email }).lean();
     
     if (!user) {
       return { authorized: false, user: null, error: 'User not found' };
@@ -41,7 +42,7 @@ export async function checkPermission(module, action = 'view') {
       return { authorized: false, user, error: 'Public vendors cannot access this module' };
     }
 
-    // Team members - check permissions
+    // Team members - check permissions (fresh from database)
     if (user.role === 'team_member' && user.permissions) {
       const modulePerms = user.permissions[module];
       
