@@ -3,14 +3,18 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]/route';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
+import { checkPermission } from '@/lib/permissions';
 
 export async function GET(request) {
   try {
-    const session = await getServerSession(authOptions);
+    // Check permission
+    const { authorized, user, error } = await checkPermission('inventory', 'view');
     
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!authorized) {
+      return NextResponse.json({ error: error || 'Insufficient permissions' }, { status: 403 });
     }
+    
+    const session = await getServerSession(authOptions);
 
     await connectDB();
 
@@ -98,11 +102,14 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const session = await getServerSession(authOptions);
+    // Check permission - need 'edit' for POST
+    const { authorized, user, error } = await checkPermission('inventory', 'edit');
     
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!authorized) {
+      return NextResponse.json({ error: error || 'Insufficient permissions to add products' }, { status: 403 });
     }
+    
+    const session = await getServerSession(authOptions);
 
     await connectDB();
     const body = await request.json();

@@ -5,21 +5,18 @@ import connectDB from '@/lib/mongodb';
 import EbayOrder from '@/models/EbayOrder';
 import Product from '@/models/Product';
 import User from '@/models/User';
+import { checkPermission } from '@/lib/permissions';
 
 export async function GET(request) {
   try {
-    const session = await getServerSession(authOptions);
+    // Check permission
+    const { authorized, user, error } = await checkPermission('orders', 'view');
     
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!authorized) {
+      return NextResponse.json({ error: error || 'Insufficient permissions' }, { status: 403 });
     }
 
     await connectDB();
-
-    const user = await User.findOne({ email: session.user.email });
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
 
     const adminId = user.adminId || user._id;
 
@@ -56,10 +53,11 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const session = await getServerSession(authOptions);
+    // Check permission - need 'edit' for POST
+    const { authorized, user, error } = await checkPermission('orders', 'edit');
     
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!authorized) {
+      return NextResponse.json({ error: error || 'Insufficient permissions to create orders' }, { status: 403 });
     }
 
     await connectDB();
