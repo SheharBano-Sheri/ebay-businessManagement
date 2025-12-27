@@ -16,18 +16,21 @@ export async function GET(request) {
 
     await connectDB();
 
-    const adminId = session.user.adminId;
+    console.log('Fetching pending products from public vendors for master admin');
 
-    console.log('Fetching pending products for master admin:', adminId);
+    // Fetch ALL unapproved products from PUBLIC vendors only
+    // First, get all public vendors
+    const publicVendors = await Vendor.find({ vendorType: 'public' }).select('_id');
+    const publicVendorIds = publicVendors.map(v => v._id);
 
-    // Fetch ALL unapproved products
     const pendingProducts = await Product.find({
-      isApproved: false,
-      isActive: true
+      approvalStatus: 'pending',
+      isActive: true,
+      vendorId: { $in: publicVendorIds } // Only public vendor products
     })
       .populate({
         path: 'vendorId',
-        select: 'name vendorType approvalStatus status'
+        select: 'name vendorType approvalStatus status autoApproveInventory'
       })
       .populate({
         path: 'addedBy',
@@ -36,7 +39,7 @@ export async function GET(request) {
       .sort({ createdAt: -1 })
       .lean();
 
-    console.log(`Found ${pendingProducts.length} pending products`);
+    console.log(`Found ${pendingProducts.length} pending products from public vendors`);
 
     return NextResponse.json({ products: pendingProducts }, { status: 200 });
   } catch (error) {
@@ -80,6 +83,7 @@ export async function POST(request) {
         {
           $set: {
             isApproved: true,
+            approvalStatus: 'approved',
             approvedBy: session.user.id,
             approvedAt: new Date()
           }
@@ -90,12 +94,13 @@ export async function POST(request) {
         message: `${productIds.length} product(s) approved successfully` 
       }, { status: 200 });
     } else {
-      // Reject = soft delete
+      // Reject = mark as rejected and deactivate
       await Product.updateMany(
         { _id: { $in: productIds } },
         {
           $set: {
-            isActive: false
+            isActive: false,
+            approvalStatus: 'rejected'
           }
         }
       );

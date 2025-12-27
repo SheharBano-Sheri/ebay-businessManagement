@@ -55,6 +55,11 @@ const ProductSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  approvalStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'approved' // Default for non-public vendor products
+  },
   isApproved: {
     type: Boolean,
     default: false

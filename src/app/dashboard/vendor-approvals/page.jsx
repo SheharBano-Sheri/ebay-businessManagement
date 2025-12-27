@@ -280,7 +280,7 @@ function VendorApprovalsContent() {
             <DialogDescription>
               {actionType === "approve"
                 ? `Are you sure you want to approve "${selectedVendor?.name}"? This will allow them to sign in and access the system.`
-                : `Are you sure you want to reject "${selectedVendor?.name}"? They will not be able to sign in.`}
+                : `Are you sure you want to reject "${selectedVendor?.name}"? Their account and all associated data will be permanently deleted.`}
             </DialogDescription>
           </DialogHeader>
           

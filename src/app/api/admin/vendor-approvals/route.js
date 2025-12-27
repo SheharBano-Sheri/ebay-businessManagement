@@ -15,12 +15,13 @@ export async function GET(request) {
 
     await connectDB();
 
-    const adminId = session.user.adminId;
+    // Master admin's ID is their own user ID, not adminId
+    const masterAdminId = session.user.id;
 
-    console.log('Fetching pending vendors for master admin:', adminId);
+    console.log('Fetching pending vendors for master admin:', masterAdminId);
 
     // First check all vendors
-    const allVendors = await Vendor.find({ adminId }).lean();
+    const allVendors = await Vendor.find({ adminId: masterAdminId }).lean();
     console.log('Total vendors in database:', allVendors.length);
     console.log('Vendors breakdown:', allVendors.map(v => ({
       name: v.name,
@@ -31,7 +32,7 @@ export async function GET(request) {
 
     // Fetch all unapproved public vendors WHO SIGNED UP THEMSELVES (have publicVendorUserId)
     const pendingVendors = await Vendor.find({
-      adminId,
+      adminId: masterAdminId,
       vendorType: 'public',
       approvalStatus: 'pending',
       publicVendorUserId: { $exists: true, $ne: null } // Only vendors who created their own account
@@ -92,44 +93,69 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
     }
 
-    // Update vendor approval status
-    const updateData = {
-      approvalStatus: action === 'approve' ? 'approved' : 'rejected',
-      status: action === 'approve' ? 'active' : 'inactive',
-      isActive: action === 'approve' ? true : false
-    };
+    if (action === 'approve') {
+      // APPROVE: Update vendor approval status
+      const updateData = {
+        approvalStatus: 'approved',
+        status: 'active',
+        isActive: true
+      };
 
-    // Set auto-approve inventory flag only if approving
-    if (action === 'approve' && autoApproveInventory !== undefined) {
-      updateData.autoApproveInventory = autoApproveInventory;
-    }
-
-    await Vendor.findByIdAndUpdate(vendorId, { $set: updateData });
-
-    // Update the associated user account
-    if (vendor.publicVendorUserId) {
-      const User = (await import('@/models/User')).default;
-      await User.findByIdAndUpdate(
-        vendor.publicVendorUserId,
-        { 
-          $set: { 
-            isActive: action === 'approve' ? true : false,
-            vendorApprovalStatus: action === 'approve' ? 'approved' : 'rejected'
-          } 
-        }
-      );
-      console.log(`Updated user account ${vendor.publicVendorUserId} - isActive: ${action === 'approve'}`);
-    }
-
-    return NextResponse.json({ 
-      message: `Vendor ${action}ed successfully`,
-      vendor: {
-        id: vendor._id,
-        name: vendor.name,
-        approvalStatus: updateData.approvalStatus,
-        autoApproveInventory: updateData.autoApproveInventory
+      // Set auto-approve inventory flag
+      if (autoApproveInventory !== undefined) {
+        updateData.autoApproveInventory = autoApproveInventory;
       }
-    }, { status: 200 });
+
+      await Vendor.findByIdAndUpdate(vendorId, { $set: updateData });
+
+      // Update the associated user account
+      if (vendor.publicVendorUserId) {
+        const User = (await import('@/models/User')).default;
+        await User.findByIdAndUpdate(
+          vendor.publicVendorUserId,
+          { 
+            $set: { 
+              isActive: true,
+              vendorApprovalStatus: 'approved'
+            } 
+          }
+        );
+        console.log(`Approved user account ${vendor.publicVendorUserId}`);
+      }
+
+      return NextResponse.json({ 
+        message: 'Vendor approved successfully',
+        vendor: {
+          id: vendor._id,
+          name: vendor.name,
+          approvalStatus: 'approved',
+          autoApproveInventory: updateData.autoApproveInventory
+        }
+      }, { status: 200 });
+    } else {
+      // REJECT: Delete both the vendor and user account completely
+      const User = (await import('@/models/User')).default;
+      const Product = (await import('@/models/Product')).default;
+      
+      // Delete all products associated with this vendor
+      if (vendor.publicVendorUserId) {
+        await Product.deleteMany({ vendorId: vendorId });
+        console.log(`Deleted all products for vendor ${vendorId}`);
+        
+        // Delete the user account
+        await User.findByIdAndDelete(vendor.publicVendorUserId);
+        console.log(`Deleted user account ${vendor.publicVendorUserId}`);
+      }
+      
+      // Delete the vendor record
+      await Vendor.findByIdAndDelete(vendorId);
+      console.log(`Deleted vendor record ${vendorId}`);
+
+      return NextResponse.json({ 
+        message: 'Vendor rejected and account deleted',
+        deleted: true
+      }, { status: 200 });
+    }
   } catch (error) {
     console.error('Error processing vendor:', error);
     return NextResponse.json({ 

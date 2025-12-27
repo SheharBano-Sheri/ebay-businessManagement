@@ -37,37 +37,75 @@ export async function GET(request) {
       query.vendorId = vendorId;
     }
 
-    // Simple visibility rules:
+    // Visibility rules with approval status:
     if (session.user.role === 'master_admin') {
-      // Master admin sees ALL products
+      // Master admin sees ALL products (including pending)
       console.log('Master admin - fetching all products');
     } else if (session.user.role === 'public_vendor') {
-      // Public vendor sees only their own products
+      // Public vendor sees only their own products (including pending)
       query.addedBy = session.user.id;
       console.log('Public vendor - fetching own products');
     } else {
-      // Regular users see only approved products
-      // For public vendors: approved products are visible to all who added the vendor
-      // For private/virtual vendors: only from their own adminId
-      query.isApproved = true;
+      // Regular users see:
+      // 1. Approved products (approvalStatus='approved') from public vendors they've added
+      // 2. All products from their own private/virtual vendors
       
       if (vendorId) {
-        // If viewing a specific vendor, check if it's public or private
+        // Viewing a specific vendor
         const Vendor = (await import('@/models/Vendor')).default;
         const vendor = await Vendor.findById(vendorId);
         
         if (vendor && vendor.vendorType === 'public') {
-          // Public vendor - don't filter by adminId
+          // Public vendor - only show approved products
+          query.approvalStatus = 'approved';
           console.log('Regular user - fetching approved products from public vendor');
         } else {
-          // Private/virtual vendor - filter by adminId
+          // Private/virtual vendor - show all products from their admin
           query.adminId = adminId;
-          console.log('Regular user - fetching approved products from private/virtual vendor');
+          console.log('Regular user - fetching products from private/virtual vendor');
         }
       } else {
-        // Viewing all products - need to show approved from public + own private/virtual
-        console.log('Regular user - fetching all approved products');
-        // Don't add adminId filter here - we want approved public vendor products too
+        // Viewing all products
+        // This is complex: we want approved public vendor products + all private/virtual vendor products
+        // We'll handle this with an $or query
+        const Vendor = (await import('@/models/Vendor')).default;
+        
+        // Get all vendors the user has added
+        const userVendors = await Vendor.find({ 
+          $or: [
+            { adminId: adminId }, // Private/virtual vendors
+            { addedByUsers: adminId, vendorType: 'public' } // Public vendors user has added
+          ]
+        }).select('_id vendorType');
+        
+        const vendorIds = userVendors.map(v => v._id);
+        
+        // Build query: show products from these vendors
+        // BUT for public vendors, only approved products
+        const publicVendorIds = userVendors.filter(v => v.vendorType === 'public').map(v => v._id);
+        const privateVendorIds = userVendors.filter(v => v.vendorType !== 'public').map(v => v._id);
+        
+        query.$or = [];
+        
+        // Add private/virtual vendor products (no approval needed)
+        if (privateVendorIds.length > 0) {
+          query.$or.push({ vendorId: { $in: privateVendorIds } });
+        }
+        
+        // Add approved public vendor products
+        if (publicVendorIds.length > 0) {
+          query.$or.push({ 
+            vendorId: { $in: publicVendorIds },
+            approvalStatus: 'approved'
+          });
+        }
+        
+        // If no vendors, return empty
+        if (query.$or.length === 0) {
+          query._id = { $exists: false }; // No results
+        }
+        
+        console.log('Regular user - fetching products from all vendors with approval filtering');
       }
     }
 
@@ -143,21 +181,35 @@ export async function POST(request) {
     let isApproved = false;
     let approvedBy = null;
     let approvedAt = null;
+    let approvalStatus = 'pending'; // Default to pending
 
     // Auto-approve logic:
-    if (vendor.autoApproveInventory === true) {
-      isApproved = true;
-      approvedBy = session.user.id;
-      approvedAt = new Date();
-      console.log('Product auto-approved: vendor has auto-approve enabled');
-    } else if (vendor.vendorType === 'private' || vendor.vendorType === 'virtual') {
+    if (vendor.vendorType === 'private' || vendor.vendorType === 'virtual') {
       // Private and virtual vendors auto-approve
       isApproved = true;
       approvedBy = session.user.id;
       approvedAt = new Date();
+      approvalStatus = 'approved';
       console.log('Product auto-approved: private/virtual vendor');
+    } else if (vendor.vendorType === 'public' && vendor.autoApproveInventory === true) {
+      // Public vendor with auto-approve enabled
+      isApproved = true;
+      approvedBy = session.user.id; // Should be master admin ID, but we'll use current user
+      approvedAt = new Date();
+      approvalStatus = 'approved';
+      console.log('Product auto-approved: public vendor has auto-approve enabled');
+    } else if (vendor.vendorType === 'public') {
+      // Public vendor without auto-approve - requires manual approval
+      isApproved = false;
+      approvalStatus = 'pending';
+      console.log('Product requires manual approval by master admin');
     } else {
-      console.log('Product requires manual approval');
+      // Default: auto-approve
+      isApproved = true;
+      approvedBy = session.user.id;
+      approvedAt = new Date();
+      approvalStatus = 'approved';
+      console.log('Product auto-approved: default');
     }
 
     const product = await Product.create({
@@ -175,6 +227,7 @@ export async function POST(request) {
       currency: currency || 'USD',
       images: images || [],
       isActive: true,
+      approvalStatus, // Add approval status
       isApproved,
       approvedBy,
       approvedAt

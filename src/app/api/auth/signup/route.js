@@ -66,18 +66,21 @@ export async function POST(request) {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Determine if this is a public vendor signup
+    const isPublicVendor = !invitation && accountType === 'public_vendor';
+
     // Create user account
     const userData = {
       email,
       password: hashedPassword,
       name,
       accountType: invitation ? 'user' : (accountType || 'user'),
-      role: invitation ? 'team_member' : 'owner',
+      role: invitation ? 'team_member' : (isPublicVendor ? 'public_vendor' : 'owner'),
       membershipPlan: invitation ? 'invited' : (membershipPlan || 'personal'),
       membershipStart: new Date(),
       membershipEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-      isActive: true,
-      vendorApprovalStatus: 'approved'
+      isActive: isPublicVendor ? false : true, // Public vendors start inactive
+      vendorApprovalStatus: isPublicVendor ? 'pending' : 'approved' // Public vendors start pending
     };
     
     // For team invitations, set admin and permissions
@@ -104,6 +107,46 @@ export async function POST(request) {
         description: 'Virtual vendor for self-sourced products',
         isActive: true
       });
+    }
+
+    // If public vendor, create public vendor record linked to master admin
+    if (isPublicVendor) {
+      // Find the master admin
+      const masterAdmin = await User.findOne({ role: 'master_admin' });
+      
+      if (!masterAdmin) {
+        // Rollback: delete the user we just created
+        await User.findByIdAndDelete(user._id);
+        return NextResponse.json({ 
+          error: 'Master admin not found. Please contact system administrator.' 
+        }, { status: 500 });
+      }
+
+      // Create public vendor record
+      await Vendor.create({
+        name: name, // Use vendor's name
+        email: email,
+        vendorType: 'public',
+        approvalStatus: 'pending',
+        status: 'pending',
+        isActive: false,
+        publicVendorUserId: user._id, // Link to the user account
+        adminId: masterAdmin._id, // Link to master admin for approval
+        description: `Public vendor: ${name}`
+      });
+
+      return NextResponse.json({
+        message: 'Account created successfully',
+        pendingApproval: true, // Flag that this account is pending approval
+        user: {
+          id: user._id,
+          email: user.email,
+          name: user.name,
+          accountType: user.accountType,
+          role: user.role,
+          membershipPlan: user.membershipPlan
+        }
+      }, { status: 201 });
     }
 
     return NextResponse.json({
