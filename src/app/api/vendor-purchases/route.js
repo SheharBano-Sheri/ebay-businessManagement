@@ -29,11 +29,12 @@ export async function POST(request) {
     const notes = formData.get('notes') || '';
 
     // --- NEW FIELDS ---
-    const Name = formData.get('Name');
+    const contactName = formData.get('contactName');
     const contactNumber = formData.get('contactNumber');
+    const deliveryAddress = formData.get('deliveryAddress');
 
-    if (!Name || !contactNumber) {
-        return NextResponse.json({ error: 'Name and Number are required' }, { status: 400 });
+    if (!contactName || !contactNumber || !deliveryAddress) {
+        return NextResponse.json({ error: 'Contact details and Delivery Address are required' }, { status: 400 });
     }
     // ------------------
     
@@ -131,8 +132,9 @@ export async function POST(request) {
         unitCost: product.unitCost,
         currency: product.currency || 'USD',
       },
-      Name,   // Saved here
-      contactNumber, // Saved here
+      contactName,
+      contactNumber,
+      deliveryAddress, // Added field
       quantity,
       totalCost,
       paymentProofs,

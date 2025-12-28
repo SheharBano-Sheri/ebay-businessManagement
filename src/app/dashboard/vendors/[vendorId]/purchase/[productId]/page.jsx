@@ -32,6 +32,7 @@ import {
   CheckCircle2,
   User,
   Phone,
+  MapPin,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -49,8 +50,9 @@ export default function PurchaseProductPage() {
   const [notes, setNotes] = useState("");
 
   // --- NEW STATE FOR CONTACT DETAILS ---
-  const [Name, setName] = useState("");
+  const [contactName, setContactName] = useState("");
   const [contactNumber, setContactNumber] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
   // ------------------------------------
 
   // File states
@@ -180,12 +182,16 @@ export default function PurchaseProductPage() {
     }
 
     // --- NEW VALIDATION ---
-    if (!Name.trim()) {
-      toast.error("Name is required");
+    if (!contactName.trim()) {
+      toast.error("Contact Name is required");
       return;
     }
     if (!contactNumber.trim()) {
       toast.error("Contact Number is required");
+      return;
+    }
+    if (!deliveryAddress.trim()) {
+      toast.error("Delivery Address is required");
       return;
     }
     // ----------------------
@@ -217,8 +223,9 @@ export default function PurchaseProductPage() {
       formData.append("notes", notes);
 
       // --- APPEND NEW FIELDS ---
-      formData.append("Name", Name);
+      formData.append("contactName", contactName);
       formData.append("contactNumber", contactNumber);
+      formData.append("deliveryAddress", deliveryAddress);
       // -------------------------
 
       // Add all payment proofs
@@ -463,36 +470,56 @@ export default function PurchaseProductPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {/* --- NEW SECTION: Contact Information --- */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-b pb-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="Name">
-                        Name <span className="text-red-500">*</span>
-                      </Label>
-                      <div className="relative">
-                        <User className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="Name"
-                          placeholder="Full Name"
-                          className="pl-9"
-                          value={Name}
-                          onChange={(e) => setName(e.target.value)}
-                          required
-                        />
+                  {/* --- NEW SECTION: Contact & Delivery Information --- */}
+                  <div className="border-b pb-6 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="contactName">
+                          Contact Name <span className="text-red-500">*</span>
+                        </Label>
+                        <div className="relative">
+                          <User className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            id="contactName"
+                            placeholder="Full Name"
+                            className="pl-9"
+                            value={contactName}
+                            onChange={(e) => setContactName(e.target.value)}
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="contactNumber">
+                          Contact Number <span className="text-red-500">*</span>
+                        </Label>
+                        <div className="relative">
+                          <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            id="contactNumber"
+                            placeholder="+1 234 567 890"
+                            className="pl-9"
+                            value={contactNumber}
+                            onChange={(e) => setContactNumber(e.target.value)}
+                            required
+                          />
+                        </div>
                       </div>
                     </div>
+
+                    {/* Delivery Address Field */}
                     <div className="space-y-2">
-                      <Label htmlFor="contactNumber">
-                        Contact Number <span className="text-red-500">*</span>
+                      <Label htmlFor="deliveryAddress">
+                        Delivery Address <span className="text-red-500">*</span>
                       </Label>
                       <div className="relative">
-                        <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="contactNumber"
-                          placeholder="+1 234 567 890"
-                          className="pl-9"
-                          value={contactNumber}
-                          onChange={(e) => setContactNumber(e.target.value)}
+                        <MapPin className="absolute left-2.5 top-3 h-4 w-4 text-muted-foreground" />
+                        <Textarea
+                          id="deliveryAddress"
+                          placeholder="Enter complete delivery address..."
+                          className="pl-9 min-h-[80px]"
+                          value={deliveryAddress}
+                          onChange={(e) => setDeliveryAddress(e.target.value)}
                           required
                         />
                       </div>
@@ -502,7 +529,7 @@ export default function PurchaseProductPage() {
 
                   {/* Quantity */}
                   <div className="space-y-2">
-                    <Label htmlFor="quantity">Quantity <span className="text-red-500">*</span></Label>
+                    <Label htmlFor="quantity">Quantity *</Label>
                     <Input
                       id="quantity"
                       type="number"

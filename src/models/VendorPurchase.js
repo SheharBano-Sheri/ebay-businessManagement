@@ -26,8 +26,8 @@ const vendorPurchaseSchema = new mongoose.Schema({
     unitCost: Number,
     currency: String,
   },
-  // --- NEW FIELDS ---
-  Name: {
+  // --- CONTACT & DELIVERY FIELDS ---
+  contactName: {
     type: String,
     required: true
   },
@@ -35,7 +35,11 @@ const vendorPurchaseSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  // ------------------
+  deliveryAddress: {
+    type: String,
+    required: true
+  },
+  // ---------------------------------
   quantity: {
     type: Number,
     required: true,
