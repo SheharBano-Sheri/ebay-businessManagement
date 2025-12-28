@@ -7,7 +7,13 @@ import { SiteHeader } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -39,6 +45,12 @@ import {
   Search,
   Calendar,
   Package,
+  MapPin,
+  Phone,
+  User,
+  FileText,
+  CheckCircle2,
+  Truck,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -98,10 +110,8 @@ export default function OrdersPage() {
       const data = await response.json();
 
       if (response.ok) {
-        console.log("Accounts fetched:", data.accounts);
         setAccounts(data.accounts || []);
       } else {
-        console.error("Failed to fetch accounts:", data.error);
         toast.error(data.error || "Failed to fetch accounts");
       }
     } catch (error) {
@@ -476,7 +486,7 @@ export default function OrdersPage() {
     window.URL.revokeObjectURL(url);
   };
 
-  // --- RENDER FOR PUBLIC VENDORS ---
+  // --- RENDER FOR PUBLIC VENDORS (UPDATED VIEW) ---
   if (isPublicVendor) {
     return (
       <SidebarProvider
@@ -496,119 +506,231 @@ export default function OrdersPage() {
                     Incoming Orders
                   </h1>
                   <p className="text-muted-foreground">
-                    Manage orders received from your business partners
+                    Manage shipments and view order details
                   </p>
                 </div>
               </div>
 
               {/* Vendor Purchases Table */}
-              <Card>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Customer</TableHead>
-                        <TableHead>Product</TableHead>
-                        <TableHead>SKU</TableHead>
-                        <TableHead className="text-right">Quantity</TableHead>
-                        <TableHead className="text-right">Total Cost</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Documents</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {loading ? (
-                        <TableRow>
-                          <TableCell colSpan={8} className="text-center py-8">
-                            <div className="flex flex-col items-center gap-2">
-                              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-                              <span className="text-muted-foreground">
-                                Loading incoming orders...
-                              </span>
-                            </div>
-                          </TableCell>
+              <Card className="border shadow-sm">
+                <CardHeader className="pb-3 bg-muted/20">
+                  <CardTitle className="text-lg">Recent Orders</CardTitle>
+                  <CardDescription>
+                    Review new orders and check shipping requirements.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/10">
+                          <TableHead className="w-[140px]">Date / ID</TableHead>
+                          <TableHead className="w-[250px]">
+                            Product Details
+                          </TableHead>
+                          <TableHead className="w-[300px]">
+                            Shipping Information
+                          </TableHead>
+                          <TableHead className="text-right">Amount</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Documents</TableHead>
                         </TableRow>
-                      ) : vendorPurchases.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={8} className="text-center py-12">
-                            <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                              <Package className="h-12 w-12 opacity-50" />
-                              <p className="text-lg font-medium">
-                                No incoming orders yet
-                              </p>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        vendorPurchases.map((purchase) => (
-                          <TableRow key={purchase._id}>
-                            <TableCell className="whitespace-nowrap">
-                              {format(
-                                new Date(purchase.createdAt),
-                                "dd/MM/yyyy HH:mm"
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {purchase.adminId?.name || "Unknown"}
-                              <br />
-                              <span className="text-xs text-muted-foreground">
-                                {purchase.adminId?.email}
-                              </span>
-                            </TableCell>
-                            <TableCell>
-                              {purchase.productSnapshot?.name || "N/A"}
-                            </TableCell>
-                            <TableCell className="font-mono text-sm">
-                              {purchase.productSnapshot?.sku || "N/A"}
-                            </TableCell>
-                            <TableCell className="text-right font-medium">
-                              {purchase.quantity}
-                            </TableCell>
-                            <TableCell className="text-right font-semibold">
-                              {purchase.productSnapshot?.currency || "USD"}{" "}
-                              {purchase.totalCost.toFixed(2)}
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant={
-                                  purchase.status === "completed"
-                                    ? "success"
-                                    : purchase.status === "processing"
-                                    ? "default"
-                                    : purchase.status === "cancelled"
-                                    ? "destructive"
-                                    : "secondary"
-                                }
-                              >
-                                {purchase.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex flex-col gap-1 text-xs">
-                                {purchase.paymentProofs?.length > 0 && (
-                                  <span className="text-green-600">
-                                    ✓ Payment Proof
-                                  </span>
-                                )}
-                                {purchase.shippingLabels?.length > 0 && (
-                                  <span className="text-blue-600">
-                                    ✓ Shipping Label
-                                  </span>
-                                )}
-                                {purchase.packingSlips?.length > 0 && (
-                                  <span className="text-purple-600">
-                                    ✓ Packing Slip
-                                  </span>
-                                )}
+                      </TableHeader>
+                      <TableBody>
+                        {loading ? (
+                          <TableRow>
+                            <TableCell
+                              colSpan={6}
+                              className="text-center py-12"
+                            >
+                              <div className="flex flex-col items-center gap-3">
+                                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+                                <span className="text-muted-foreground">
+                                  Fetching your orders...
+                                </span>
                               </div>
                             </TableCell>
                           </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                        ) : vendorPurchases.length === 0 ? (
+                          <TableRow>
+                            <TableCell
+                              colSpan={6}
+                              className="text-center py-16"
+                            >
+                              <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                                <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center">
+                                  <Package className="h-8 w-8 opacity-50" />
+                                </div>
+                                <div>
+                                  <p className="text-lg font-medium text-foreground">
+                                    No orders yet
+                                  </p>
+                                  <p className="text-sm">
+                                    New orders from your partners will appear
+                                    here.
+                                  </p>
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          vendorPurchases.map((purchase) => (
+                            <TableRow
+                              key={purchase._id}
+                              className="hover:bg-muted/5"
+                            >
+                              {/* Date & ID */}
+                              <TableCell className="align-top">
+                                <div className="flex flex-col gap-1">
+                                  <span className="font-medium">
+                                    {format(
+                                      new Date(purchase.createdAt),
+                                      "MMM dd, yyyy"
+                                    )}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {format(
+                                      new Date(purchase.createdAt),
+                                      "HH:mm a"
+                                    )}
+                                  </span>
+                                  <span className="text-xs font-mono text-muted-foreground mt-1 bg-muted px-1.5 py-0.5 rounded w-fit">
+                                    #{purchase._id.slice(-6).toUpperCase()}
+                                  </span>
+                                </div>
+                              </TableCell>
+
+                              {/* Product Details */}
+                              <TableCell className="align-top">
+                                <div className="flex flex-col gap-1">
+                                  <span className="font-semibold text-foreground">
+                                    {purchase.productSnapshot?.name ||
+                                      "Product Unavailable"}
+                                  </span>
+                                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <Badge
+                                      variant="outline"
+                                      className="font-mono text-xs"
+                                    >
+                                      {purchase.productSnapshot?.sku ||
+                                        "NO-SKU"}
+                                    </Badge>
+                                  </div>
+                                  {purchase.notes && (
+                                    <div className="mt-2 text-xs bg-yellow-50 dark:bg-yellow-900/10 text-yellow-800 dark:text-yellow-200 p-2 rounded border border-yellow-100 dark:border-yellow-900/30">
+                                      <span className="font-semibold">
+                                        Note:
+                                      </span>{" "}
+                                      {purchase.notes}
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+
+                              {/* Shipping Information (Clean & Decent Look) */}
+                              <TableCell className="align-top">
+                                <div className="flex flex-col gap-2 text-sm">
+                                  <div className="flex items-center gap-2">
+                                    <User className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span className="font-medium">
+                                      {purchase.contactName || "N/A"}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span className="text-muted-foreground hover:text-foreground transition-colors">
+                                      {purchase.contactNumber || "N/A"}
+                                    </span>
+                                  </div>
+                                  <div className="flex gap-2 mt-1">
+                                    <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                                    <span className="text-muted-foreground leading-snug">
+                                      {purchase.deliveryAddress ||
+                                        "No Address Provided"}
+                                    </span>
+                                  </div>
+                                </div>
+                              </TableCell>
+
+                              {/* Amount */}
+                              <TableCell className="text-right align-top">
+                                <div className="flex flex-col gap-1">
+                                  <span className="font-bold">
+                                    {purchase.productSnapshot?.currency ||
+                                      "USD"}{" "}
+                                    {purchase.totalCost.toFixed(2)}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    Qty: {purchase.quantity}
+                                  </span>
+                                </div>
+                              </TableCell>
+
+                              {/* Status */}
+                              <TableCell className="align-top">
+                                <Badge
+                                  className="capitalize shadow-none"
+                                  variant={
+                                    purchase.status === "completed"
+                                      ? "success"
+                                      : purchase.status === "processing"
+                                      ? "secondary"
+                                      : purchase.status === "cancelled"
+                                      ? "destructive"
+                                      : "outline"
+                                  }
+                                >
+                                  {purchase.status}
+                                </Badge>
+                              </TableCell>
+
+                              {/* Documents */}
+                              <TableCell className="align-top">
+                                <div className="flex flex-col gap-1.5">
+                                  {purchase.paymentProofs?.length > 0 && (
+                                    <a
+                                      href={purchase.paymentProofs[0]?.path}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1.5 text-xs text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded-md border border-green-100 dark:border-green-900/30 hover:underline"
+                                    >
+                                      <CheckCircle2 className="h-3 w-3" />{" "}
+                                      Payment
+                                    </a>
+                                  )}
+                                  {purchase.shippingLabels?.length > 0 ? (
+                                    <a
+                                      href={purchase.shippingLabels[0]?.path}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1.5 text-xs text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded-md border border-blue-100 dark:border-blue-900/30 hover:underline"
+                                    >
+                                      <Truck className="h-3 w-3" /> Label
+                                    </a>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground italic pl-1">
+                                      No label
+                                    </span>
+                                  )}
+                                  {purchase.packingSlips?.length > 0 && (
+                                    <a
+                                      href={purchase.packingSlips[0]?.path}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1.5 text-xs text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded-md border border-purple-100 dark:border-purple-900/30 hover:underline"
+                                    >
+                                      <FileText className="h-3 w-3" /> Slip
+                                    </a>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
               </Card>
             </div>
           </div>
