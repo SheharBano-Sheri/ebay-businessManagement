@@ -15,24 +15,49 @@ export async function GET(request) {
     await connectDB();
 
     const { searchParams } = new URL(request.url);
-    const type = searchParams.get('type'); // public, private, virtual
+    const id = searchParams.get('id'); // <--- CHECK FOR ID
+    const type = searchParams.get('type');
     
-    // For regular users (owner), adminId is their own ID
-    // For team members, adminId is their admin's ID
     const adminId = session.user.adminId || session.user.id;
-
-    const userId = session.user.id; // Get the actual user ID
-    let query = {};
-    
-    // Master admin sees all vendors including pending ones
+    const userId = session.user.id;
     const isMasterAdmin = session.user.role === 'master_admin';
+
+    // --- FIX START: Handle Single Vendor Fetch by ID ---
+    if (id) {
+      const vendor = await Vendor.findById(id);
+      
+      if (!vendor) {
+        return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
+      }
+
+      // Permission Logic:
+      // 1. Master Admin can see anything.
+      // 2. User can see Private/Virtual vendors ONLY if they own them (adminId match).
+      // 3. User can see Public vendors if they are Active & Approved.
+      const isOwner = vendor.vendorType !== 'public' && vendor.adminId === adminId;
+      const isAccessiblePublic = vendor.vendorType === 'public' && vendor.isActive && (isMasterAdmin || vendor.approvalStatus === 'approved');
+
+      if (!isMasterAdmin && !isOwner && !isAccessiblePublic) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      }
+
+      // Add meta data for public vendors (match list view behavior)
+      const vendorObj = vendor.toObject();
+      if (vendor.vendorType === 'public') {
+        vendorObj.followerCount = vendor.addedByUsers?.length || 0;
+        vendorObj.isAddedByCurrentUser = vendor.addedByUsers?.includes(adminId) || false;
+      }
+
+      return NextResponse.json({ vendor: vendorObj }, { status: 200 });
+    }
+    // --- FIX END ---
+
+    let query = {};
     
     if (type === 'public') {
       query.vendorType = 'public';
       query.isActive = true;
-      // Exclude user's own public vendor from marketplace
       query.publicVendorUserId = { $ne: userId };
-      // Regular users only see approved public vendors
       if (!isMasterAdmin) {
         query.approvalStatus = 'approved';
       }
@@ -43,7 +68,6 @@ export async function GET(request) {
       query.vendorType = 'virtual';
       query.adminId = adminId;
     } else {
-      // Get all vendors accessible to this admin
       if (isMasterAdmin) {
         query = {
           $or: [
@@ -65,7 +89,6 @@ export async function GET(request) {
 
     const vendors = await Vendor.find(query).sort({ createdAt: -1 });
 
-    // Add follower count for public vendors and check if current user added them
     const vendorsWithMeta = vendors.map(vendor => {
       const vendorObj = vendor.toObject();
       if (vendor.vendorType === 'public') {
@@ -95,11 +118,8 @@ export async function POST(request) {
 
     const { name, email, phone, website, vendorType, description, notes, address, linkedVendorId } = body;
 
-    // For regular users (owner), adminId is their own ID
-    // For team members, adminId is their admin's ID
     const adminId = session.user.adminId || session.user.id;
 
-    // Handle adding an existing public vendor to user's account
     if (linkedVendorId) {
       const publicVendor = await Vendor.findById(linkedVendorId);
       
@@ -107,17 +127,14 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Public vendor not found' }, { status: 404 });
       }
 
-      // Check if vendor is approved (master admin check is not needed for adding)
       if (publicVendor.approvalStatus !== 'approved') {
         return NextResponse.json({ error: 'This vendor is not yet approved' }, { status: 400 });
       }
 
-      // Check if user already added this vendor
       if (publicVendor.addedByUsers && publicVendor.addedByUsers.includes(adminId)) {
         return NextResponse.json({ error: 'You have already added this vendor' }, { status: 400 });
       }
 
-      // Add user to the vendor's addedByUsers list
       publicVendor.addedByUsers = publicVendor.addedByUsers || [];
       publicVendor.addedByUsers.push(adminId);
       await publicVendor.save();
@@ -128,13 +145,10 @@ export async function POST(request) {
       }, { status: 200 });
     }
 
-    // Create new vendor (existing logic)
     if (!name || !vendorType) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Prevent regular users from creating public vendors
-    // Public vendors must sign up through "Become a Vendor" flow
     if (vendorType === 'public' && session.user.role !== 'master_admin') {
       return NextResponse.json({ 
         error: 'Public vendors cannot be created directly. Please use "Become a Vendor" registration or contact us.' 
