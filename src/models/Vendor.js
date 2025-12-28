@@ -58,6 +58,14 @@ const VendorSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
+  // --- NEW FIELD: Vendor Order Requirements ---
+  requirements: {
+    paymentProof: { type: Boolean, default: true },
+    shippingLabel: { type: Boolean, default: false },
+    packingSlip: { type: Boolean, default: false },
+    instructions: { type: String, default: "" }
+  },
+  // ---------------------------------------------
   description: {
     type: String
   },

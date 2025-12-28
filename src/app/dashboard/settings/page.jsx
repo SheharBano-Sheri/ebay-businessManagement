@@ -9,43 +9,60 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { User, Mail, Building2, CreditCard, Bell, Shield, LogOut, Users, Monitor, Smartphone, Clock, MapPin, Check, X, Trash2 } from "lucide-react";
+import {
+  User,
+  Mail,
+  CreditCard,
+  Bell,
+  LogOut,
+  Users,
+  Store,
+} from "lucide-react";
 
 function SettingsContent() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [vendorNotification, setVendorNotification] = useState(null);
-  const defaultTab = searchParams.get('tab') || 'account';
-  
+  const defaultTab = searchParams.get("tab") || "account";
+
+  // Vendor Settings State
+  const [vendorProfile, setVendorProfile] = useState(null);
+  const [vendorRequirements, setVendorRequirements] = useState({
+    paymentProof: true,
+    shippingLabel: false,
+    packingSlip: false,
+    instructions: "",
+  });
+  const [loadingVendor, setLoadingVendor] = useState(false);
+
   // Security states
   const [passwordForm, setPasswordForm] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
   });
-  const [activeSessions, setActiveSessions] = useState([]);
-  const [loginHistory, setLoginHistory] = useState([]);
-  const [loadingSessions, setLoadingSessions] = useState(false);
-  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
-    if (session?.user?.role === 'public_vendor') {
+    if (session?.user?.role === "public_vendor") {
       fetchVendorNotifications();
+      fetchVendorProfile();
     }
-    
-    // Fetch sessions and login history when security tab is potentially active
-    if (defaultTab === 'security') {
-      fetchActiveSessions();
-      fetchLoginHistory();
-    }
-  }, [session, defaultTab]);
+  }, [session]);
 
   const fetchVendorNotifications = async () => {
     try {
@@ -59,112 +76,97 @@ function SettingsContent() {
     }
   };
 
-  const fetchActiveSessions = async () => {
+  const fetchVendorProfile = async () => {
     try {
-      setLoadingSessions(true);
-      const response = await fetch('/api/auth/sessions');
-      const data = await response.json();
-      if (response.ok) {
-        setActiveSessions(data.sessions || []);
+      const res = await fetch("/api/vendors?own=true");
+      const data = await res.json();
+      if (data.vendor) {
+        setVendorProfile(data.vendor);
+        if (data.vendor.requirements) {
+          setVendorRequirements({
+            paymentProof: data.vendor.requirements.paymentProof ?? true,
+            shippingLabel: data.vendor.requirements.shippingLabel ?? false,
+            packingSlip: data.vendor.requirements.packingSlip ?? false,
+            instructions: data.vendor.requirements.instructions ?? "",
+          });
+        }
       }
     } catch (error) {
-      console.error('Failed to fetch sessions');
-    } finally {
-      setLoadingSessions(false);
+      console.error("Failed to load profile", error);
     }
   };
 
-  const fetchLoginHistory = async () => {
+  const handleSaveVendorSettings = async () => {
+    if (!vendorProfile) return;
+    setLoadingVendor(true);
     try {
-      setLoadingHistory(true);
-      const response = await fetch('/api/auth/login-history?limit=10');
-      const data = await response.json();
-      if (response.ok) {
-        setLoginHistory(data.history || []);
+      const res = await fetch("/api/vendors", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: vendorProfile._id,
+          requirements: vendorRequirements,
+        }),
+      });
+
+      if (res.ok) {
+        toast.success("Order requirements updated successfully");
+      } else {
+        toast.error("Failed to update settings");
       }
     } catch (error) {
-      console.error('Failed to fetch login history');
+      toast.error("Error saving settings");
     } finally {
-      setLoadingHistory(false);
+      setLoadingVendor(false);
     }
   };
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
-    
+
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      toast.error('New passwords do not match');
+      toast.error("New passwords do not match");
       return;
     }
 
     if (passwordForm.newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters');
+      toast.error("Password must be at least 6 characters");
       return;
     }
 
     try {
       setLoading(true);
-      const response = await fetch('/api/auth/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           currentPassword: passwordForm.currentPassword,
-          newPassword: passwordForm.newPassword
-        })
+          newPassword: passwordForm.newPassword,
+        }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        toast.success('Password changed successfully');
-        setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        toast.success("Password changed successfully");
+        setPasswordForm({
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        });
       } else {
-        toast.error(data.error || 'Failed to change password');
+        toast.error(data.error || "Failed to change password");
       }
     } catch (error) {
-      toast.error('Error changing password');
+      toast.error("Error changing password");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRevokeSession = async (sessionId) => {
-    try {
-      const response = await fetch(`/api/auth/sessions?sessionId=${sessionId}`, {
-        method: 'DELETE'
-      });
-
-      if (response.ok) {
-        toast.success('Session revoked successfully');
-        fetchActiveSessions();
-      } else {
-        toast.error('Failed to revoke session');
-      }
-    } catch (error) {
-      toast.error('Error revoking session');
-    }
-  };
-
-  const handleRevokeAllSessions = async () => {
-    try {
-      const response = await fetch('/api/auth/sessions?action=all', {
-        method: 'DELETE'
-      });
-
-      if (response.ok) {
-        toast.success('All other sessions revoked');
-        fetchActiveSessions();
-      } else {
-        toast.error('Failed to revoke sessions');
-      }
-    } catch (error) {
-      toast.error('Error revoking sessions');
-    }
-  };
-
   const handleLogout = async () => {
     try {
-      await signOut({ callbackUrl: '/auth/signin' });
+      await signOut({ callbackUrl: "/auth/signin" });
     } catch (error) {
       toast.error("Error signing out");
     }
@@ -182,7 +184,6 @@ function SettingsContent() {
         <SiteHeader />
         <div className="flex flex-1 flex-col p-4 lg:p-6">
           <div className="space-y-6">
-            {/* Page Header */}
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
               <p className="text-muted-foreground">
@@ -193,6 +194,9 @@ function SettingsContent() {
             <Tabs defaultValue={defaultTab} className="space-y-4">
               <TabsList>
                 <TabsTrigger value="account">Account</TabsTrigger>
+                {session?.user?.role === "public_vendor" && (
+                  <TabsTrigger value="vendor">Vendor</TabsTrigger>
+                )}
                 <TabsTrigger value="billing">Billing</TabsTrigger>
                 <TabsTrigger value="notifications">Notifications</TabsTrigger>
                 <TabsTrigger value="security">Security</TabsTrigger>
@@ -233,7 +237,7 @@ function SettingsContent() {
                       <Label>Membership Plan</Label>
                       <div className="flex items-center gap-2">
                         <Badge variant="default" className="capitalize">
-                          {session?.user?.membershipPlan || 'Personal'}
+                          {session?.user?.membershipPlan || "Personal"}
                         </Badge>
                       </div>
                     </div>
@@ -243,9 +247,7 @@ function SettingsContent() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-red-600">Danger Zone</CardTitle>
-                    <CardDescription>
-                      Irreversible actions
-                    </CardDescription>
+                    <CardDescription>Irreversible actions</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -255,8 +257,8 @@ function SettingsContent() {
                           Sign out of your account
                         </p>
                       </div>
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         onClick={handleLogout}
                         className="gap-2"
                       >
@@ -267,6 +269,93 @@ function SettingsContent() {
                   </CardContent>
                 </Card>
               </TabsContent>
+
+              {/* Vendor Settings Tab (Only for Public Vendors) */}
+              {session?.user?.role === "public_vendor" && (
+                <TabsContent value="vendor" className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Order Requirements</CardTitle>
+                      <CardDescription>
+                        Select what documents customers must provide when
+                        placing an order with you.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="flex items-center justify-between border-b pb-4">
+                        <div className="space-y-0.5">
+                          <Label className="text-base">Payment Proof</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Require customers to upload a screenshot of payment.
+                          </p>
+                        </div>
+                        <Checkbox
+                          checked={vendorRequirements.paymentProof}
+                          disabled={true}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between border-b pb-4">
+                        <div className="space-y-0.5">
+                          <Label className="text-base">Shipping Label</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Require customers to provide a shipping label.
+                          </p>
+                        </div>
+                        <Checkbox
+                          checked={vendorRequirements.shippingLabel}
+                          onCheckedChange={(checked) =>
+                            setVendorRequirements((prev) => ({
+                              ...prev,
+                              shippingLabel: checked,
+                            }))
+                          }
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between border-b pb-4">
+                        <div className="space-y-0.5">
+                          <Label className="text-base">Packing Slip</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Require customers to include a packing slip.
+                          </p>
+                        </div>
+                        <Checkbox
+                          checked={vendorRequirements.packingSlip}
+                          onCheckedChange={(checked) =>
+                            setVendorRequirements((prev) => ({
+                              ...prev,
+                              packingSlip: checked,
+                            }))
+                          }
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Additional Instructions</Label>
+                        <Textarea
+                          placeholder="Enter any specific instructions for your buyers..."
+                          value={vendorRequirements.instructions}
+                          onChange={(e) =>
+                            setVendorRequirements((prev) => ({
+                              ...prev,
+                              instructions: e.target.value,
+                            }))
+                          }
+                          rows={4}
+                        />
+                      </div>
+
+                      <Button
+                        onClick={handleSaveVendorSettings}
+                        disabled={loadingVendor}
+                      >
+                        {loadingVendor ? "Saving..." : "Save Requirements"}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              )}
 
               {/* Billing Tab */}
               <TabsContent value="billing" className="space-y-4">
@@ -296,13 +385,19 @@ function SettingsContent() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {session?.user?.role === 'public_vendor' ? (
+                    {session?.user?.role === "public_vendor" ? (
                       <div className="space-y-4">
                         {vendorNotification ? (
                           <Alert className="bg-primary/10 border-primary/20">
                             <Users className="h-4 w-4" />
                             <AlertDescription>
-                              <strong>{vendorNotification.followerCount}</strong> {vendorNotification.followerCount === 1 ? 'user has' : 'users have'} added you as a vendor!
+                              <strong>
+                                {vendorNotification.followerCount}
+                              </strong>{" "}
+                              {vendorNotification.followerCount === 1
+                                ? "user has"
+                                : "users have"}{" "}
+                              added you as a vendor!
                             </AlertDescription>
                           </Alert>
                         ) : (
@@ -324,7 +419,6 @@ function SettingsContent() {
 
               {/* Security Tab */}
               <TabsContent value="security" className="space-y-4">
-                {/* Change Password */}
                 <Card>
                   <CardHeader>
                     <CardTitle>Change Password</CardTitle>
@@ -335,12 +429,19 @@ function SettingsContent() {
                   <CardContent>
                     <form onSubmit={handleChangePassword} className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="current-password">Current Password</Label>
+                        <Label htmlFor="current-password">
+                          Current Password
+                        </Label>
                         <Input
                           id="current-password"
                           type="password"
                           value={passwordForm.currentPassword}
-                          onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                          onChange={(e) =>
+                            setPasswordForm({
+                              ...passwordForm,
+                              currentPassword: e.target.value,
+                            })
+                          }
                           required
                         />
                       </div>
@@ -350,7 +451,12 @@ function SettingsContent() {
                           id="new-password"
                           type="password"
                           value={passwordForm.newPassword}
-                          onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                          onChange={(e) =>
+                            setPasswordForm({
+                              ...passwordForm,
+                              newPassword: e.target.value,
+                            })
+                          }
                           required
                         />
                         <p className="text-xs text-muted-foreground">
@@ -358,17 +464,24 @@ function SettingsContent() {
                         </p>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="confirm-password">Confirm New Password</Label>
+                        <Label htmlFor="confirm-password">
+                          Confirm New Password
+                        </Label>
                         <Input
                           id="confirm-password"
                           type="password"
                           value={passwordForm.confirmPassword}
-                          onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                          onChange={(e) =>
+                            setPasswordForm({
+                              ...passwordForm,
+                              confirmPassword: e.target.value,
+                            })
+                          }
                           required
                         />
                       </div>
                       <Button type="submit" disabled={loading}>
-                        {loading ? 'Changing Password...' : 'Change Password'}
+                        {loading ? "Changing Password..." : "Change Password"}
                       </Button>
                     </form>
                   </CardContent>
@@ -384,11 +497,13 @@ function SettingsContent() {
 
 export default function SettingsPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center">
-        <p>Loading...</p>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <p>Loading...</p>
+        </div>
+      }
+    >
       <SettingsContent />
     </Suspense>
   );

@@ -9,28 +9,55 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, FileText, X, Loader2, CheckCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Upload,
+  FileText,
+  X,
+  Loader2,
+  CheckCircle,
+  Info,
+  Package,
+  AlertCircle,
+  CheckCircle2,
+} from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function PurchaseProductPage() {
   const params = useParams();
   const router = useRouter();
   const { vendorId, productId } = params;
-  
+
   const [vendor, setVendor] = useState(null);
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  
+
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState("");
-  
+
   // File states
   const [paymentProofs, setPaymentProofs] = useState([]);
   const [shippingLabels, setShippingLabels] = useState([]);
   const [packingSlips, setPackingSlips] = useState([]);
+
+  // Vendor Requirements - Initialize with defaults
+  const [requirements, setRequirements] = useState({
+    paymentProof: true,
+    shippingLabel: false,
+    packingSlip: false,
+    instructions: "",
+  });
 
   useEffect(() => {
     fetchData();
@@ -39,25 +66,53 @@ export default function PurchaseProductPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      
-      // Fetch vendor
-      const vendorResponse = await fetch(`/api/vendors?id=${vendorId}`);
+
+      // Fetch vendor - ADD TIMESTAMP TO BUST CACHE
+      const timestamp = Date.now();
+      const vendorResponse = await fetch(
+        `/api/vendors?id=${vendorId}&t=${timestamp}`
+      );
       const vendorData = await vendorResponse.json();
-      
+
       if (vendorResponse.ok && vendorData.vendor) {
         setVendor(vendorData.vendor);
+
+        // --- KEY FIX: HANDLE MISSING OR EMPTY REQUIREMENTS ---
+        if (vendorData.vendor.requirements) {
+          console.log(
+            "Using fetched requirements:",
+            vendorData.vendor.requirements
+          );
+          setRequirements((prev) => ({
+            ...prev,
+            ...vendorData.vendor.requirements,
+          }));
+        } else {
+          console.log("No requirements found, using defaults");
+          // Ensure defaults are enforced if DB field is missing
+          setRequirements({
+            paymentProof: true,
+            shippingLabel: false,
+            packingSlip: false,
+            instructions: "",
+          });
+        }
       } else {
         toast.error("Vendor not found");
         router.push("/dashboard/vendors");
         return;
       }
-      
+
       // Fetch product
-      const productsResponse = await fetch(`/api/products?vendorId=${vendorId}`);
+      const productsResponse = await fetch(
+        `/api/products?vendorId=${vendorId}`
+      );
       const productsData = await productsResponse.json();
-      
+
       if (productsResponse.ok) {
-        const foundProduct = productsData.products.find(p => p._id === productId);
+        const foundProduct = productsData.products.find(
+          (p) => p._id === productId
+        );
         if (foundProduct) {
           setProduct(foundProduct);
         } else {
@@ -75,85 +130,96 @@ export default function PurchaseProductPage() {
 
   const handleFileChange = (e, type) => {
     const files = Array.from(e.target.files);
-    
+
     if (files.length === 0) return;
-    
+
     // Add new files to the respective array
-    switch(type) {
-      case 'payment':
-        setPaymentProofs(prev => [...prev, ...files]);
+    switch (type) {
+      case "payment":
+        setPaymentProofs((prev) => [...prev, ...files]);
         break;
-      case 'shipping':
-        setShippingLabels(prev => [...prev, ...files]);
+      case "shipping":
+        setShippingLabels((prev) => [...prev, ...files]);
         break;
-      case 'packing':
-        setPackingSlips(prev => [...prev, ...files]);
+      case "packing":
+        setPackingSlips((prev) => [...prev, ...files]);
         break;
     }
-    
+
     // Reset input
-    e.target.value = '';
+    e.target.value = "";
   };
 
   const removeFile = (index, type) => {
-    switch(type) {
-      case 'payment':
-        setPaymentProofs(prev => prev.filter((_, i) => i !== index));
+    switch (type) {
+      case "payment":
+        setPaymentProofs((prev) => prev.filter((_, i) => i !== index));
         break;
-      case 'shipping':
-        setShippingLabels(prev => prev.filter((_, i) => i !== index));
+      case "shipping":
+        setShippingLabels((prev) => prev.filter((_, i) => i !== index));
         break;
-      case 'packing':
-        setPackingSlips(prev => prev.filter((_, i) => i !== index));
+      case "packing":
+        setPackingSlips((prev) => prev.filter((_, i) => i !== index));
         break;
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (quantity <= 0 || quantity > product.stock) {
       toast.error(`Quantity must be between 1 and ${product.stock}`);
       return;
     }
-    
-    if (paymentProofs.length === 0) {
-      toast.error("Please upload at least one payment proof");
+
+    // Validation based on dynamic requirements
+    if (requirements.paymentProof && paymentProofs.length === 0) {
+      toast.error("Payment proof is required by the vendor");
       return;
     }
-    
+
+    if (requirements.shippingLabel && shippingLabels.length === 0) {
+      toast.error("Shipping label is required by the vendor");
+      return;
+    }
+
+    if (requirements.packingSlip && packingSlips.length === 0) {
+      toast.error("Packing slip is required by the vendor");
+      return;
+    }
+
     try {
       setSubmitting(true);
-      
+
       // Create FormData for file upload
       const formData = new FormData();
-      formData.append('vendorId', vendorId);
-      formData.append('productId', productId);
-      formData.append('quantity', quantity);
-      formData.append('notes', notes);
-      
+      formData.append("vendorId", vendorId);
+      formData.append("productId", productId);
+      formData.append("quantity", quantity);
+      formData.append("notes", notes);
+
       // Add all payment proofs
-      paymentProofs.forEach(file => {
-        formData.append('paymentProofs', file);
+      paymentProofs.forEach((file) => {
+        formData.append("paymentProofs", file);
       });
-      
+
       // Add all shipping labels
-      shippingLabels.forEach(file => {
-        formData.append('shippingLabels', file);
+      shippingLabels.forEach((file) => {
+        formData.append("shippingLabels", file);
       });
-      
+
       // Add all packing slips
-      packingSlips.forEach(file => {
-        formData.append('packingSlips', file);
+      packingSlips.forEach((file) => {
+        formData.append("packingSlips", file);
       });
-      
-      const response = await fetch('/api/vendor-purchases', {
-        method: 'POST',
+
+      const response = await fetch("/api/vendor-purchases", {
+        method: "POST",
         body: formData,
       });
-      
+
       const data = await response.json();
-      
+
       if (response.ok) {
         toast.success("Purchase order created successfully!");
         router.push(`/dashboard/vendors/${vendorId}/inventory`);
@@ -170,9 +236,11 @@ export default function PurchaseProductPage() {
 
   const totalCost = product ? (product.unitCost * quantity).toFixed(2) : "0.00";
 
-  const FileList = ({ files, type, label }) => (
+  const FileList = ({ files, type, label, required }) => (
     <div className="space-y-2">
-      <Label>{label}</Label>
+      <Label>
+        {label} {required && <span className="text-red-500">*</span>}
+      </Label>
       <div className="space-y-2">
         <div className="flex items-center gap-2">
           <Input
@@ -249,15 +317,75 @@ export default function PurchaseProductPage() {
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => router.push(`/dashboard/vendors/${vendorId}/inventory`)}
+                onClick={() =>
+                  router.push(`/dashboard/vendors/${vendorId}/inventory`)
+                }
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <div>
-                <h1 className="text-3xl font-bold tracking-tight">Purchase Product</h1>
+                <h1 className="text-3xl font-bold tracking-tight">
+                  Purchase Product
+                </h1>
                 <p className="text-muted-foreground">
                   Complete your purchase by uploading required documents
                 </p>
+              </div>
+            </div>
+
+            {/* Vendor Requirements Alert */}
+            {/* --- NEW STYLING: REQUIREMENTS CHECKLIST --- */}
+            <div className="bg-card border rounded-xl shadow-sm overflow-hidden">
+              <div className="bg-muted/40 p-4 border-b">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-primary" />
+                  Required for this Order
+                </h3>
+              </div>
+              <div className="p-4 space-y-4">
+                <div className="grid sm:grid-cols-3 gap-4">
+                  {/* Always show Payment Proof if required */}
+                  {requirements.paymentProof && (
+                    <div className="flex items-center gap-3 p-3 rounded-lg border bg-background border-primary/20 shadow-sm">
+                      <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 bg-primary/10 text-primary">
+                        <CheckCircle2 className="h-4 w-4" />
+                      </div>
+                      <span className="text-sm font-medium">Payment Proof</span>
+                    </div>
+                  )}
+
+                  {requirements.shippingLabel && (
+                    <div className="flex items-center gap-3 p-3 rounded-lg border bg-background border-primary/20 shadow-sm">
+                      <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 bg-primary/10 text-primary">
+                        <Package className="h-4 w-4" />
+                      </div>
+                      <span className="text-sm font-medium">
+                        Shipping Label
+                      </span>
+                    </div>
+                  )}
+
+                  {requirements.packingSlip && (
+                    <div className="flex items-center gap-3 p-3 rounded-lg border bg-background border-primary/20 shadow-sm">
+                      <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 bg-primary/10 text-primary">
+                        <FileText className="h-4 w-4" />
+                      </div>
+                      <span className="text-sm font-medium">Packing Slip</span>
+                    </div>
+                  )}
+                </div>
+
+                {requirements.instructions && (
+                  <div className="flex gap-3 p-3 bg-blue-50/50 dark:bg-blue-900/10 text-blue-700 dark:text-blue-300 rounded-md text-sm border border-blue-100 dark:border-blue-900">
+                    <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                    <p>
+                      <strong className="font-semibold">
+                        Note from Vendor:
+                      </strong>{" "}
+                      {requirements.instructions}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -277,7 +405,9 @@ export default function PurchaseProductPage() {
                     <p className="font-medium">{product?.sku}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Product Name</p>
+                    <p className="text-sm text-muted-foreground">
+                      Product Name
+                    </p>
                     <p className="font-medium">{product?.name}</p>
                   </div>
                   <div>
@@ -287,8 +417,12 @@ export default function PurchaseProductPage() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Available Stock</p>
-                    <Badge variant={product?.stock > 0 ? "success" : "destructive"}>
+                    <p className="text-sm text-muted-foreground">
+                      Available Stock
+                    </p>
+                    <Badge
+                      variant={product?.stock > 0 ? "success" : "destructive"}
+                    >
                       {product?.stock}
                     </Badge>
                   </div>
@@ -315,7 +449,9 @@ export default function PurchaseProductPage() {
                       min="1"
                       max={product?.stock}
                       value={quantity}
-                      onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                      onChange={(e) =>
+                        setQuantity(parseInt(e.target.value) || 1)
+                      }
                       required
                     />
                     <p className="text-sm text-muted-foreground">
@@ -323,26 +459,33 @@ export default function PurchaseProductPage() {
                     </p>
                   </div>
 
-                  {/* Payment Proof (Required) */}
+                  {/* Payment Proof (Based on requirements) */}
                   <FileList
                     files={paymentProofs}
                     type="payment"
-                    label="Payment Proof * (Required)"
+                    label="Payment Proof"
+                    required={requirements.paymentProof}
                   />
 
-                  {/* Shipping Label (Optional) */}
-                  <FileList
-                    files={shippingLabels}
-                    type="shipping"
-                    label="Shipping Label (Optional)"
-                  />
+                  {/* Shipping Label (Conditional) */}
+                  {requirements.shippingLabel && (
+                    <FileList
+                      files={shippingLabels}
+                      type="shipping"
+                      label="Shipping Label"
+                      required={true}
+                    />
+                  )}
 
-                  {/* Packing Slip (Optional) */}
-                  <FileList
-                    files={packingSlips}
-                    type="packing"
-                    label="Packing Slip (Optional)"
-                  />
+                  {/* Packing Slip (Conditional) */}
+                  {requirements.packingSlip && (
+                    <FileList
+                      files={packingSlips}
+                      type="packing"
+                      label="Packing Slip"
+                      required={true}
+                    />
+                  )}
 
                   {/* Notes */}
                   <div className="space-y-2">
@@ -360,7 +503,9 @@ export default function PurchaseProductPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => router.push(`/dashboard/vendors/${vendorId}/inventory`)}
+                    onClick={() =>
+                      router.push(`/dashboard/vendors/${vendorId}/inventory`)
+                    }
                     disabled={submitting}
                   >
                     Cancel
