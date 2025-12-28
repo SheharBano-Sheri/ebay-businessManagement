@@ -19,7 +19,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Search, Plus, Building2, CheckCircle, Mail, UserPlus, Package, Eye, Settings } from "lucide-react";
+import { Search, Plus, Building2, CheckCircle, Mail, UserPlus, Eye, Settings } from "lucide-react";
 
 export default function VendorsPage() {
   const [publicVendors, setPublicVendors] = useState([]);
@@ -27,10 +27,6 @@ export default function VendorsPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isInviteOpen, setIsInviteOpen] = useState(false);
-  const [isProductsOpen, setIsProductsOpen] = useState(false);
-  const [selectedVendor, setSelectedVendor] = useState(null);
-  const [vendorProducts, setVendorProducts] = useState([]);
-  const [loadingProducts, setLoadingProducts] = useState(false);
   const [inviteForm, setInviteForm] = useState({
     email: '',
     name: '',
@@ -131,25 +127,9 @@ export default function VendorsPage() {
     // TODO: Implement edit functionality
   };
 
-  const handleViewProducts = async (vendor) => {
-    setSelectedVendor(vendor);
-    setIsProductsOpen(true);
-    setLoadingProducts(true);
-    
-    try {
-      const response = await fetch(`/api/products?vendorId=${vendor._id}`);
-      const data = await response.json();
-      
-      if (response.ok) {
-        setVendorProducts(data.products || []);
-      } else {
-        toast.error('Failed to load products');
-      }
-    } catch (error) {
-      toast.error('Error loading products');
-    } finally {
-      setLoadingProducts(false);
-    }
+  const handleViewProducts = (vendor) => {
+    // Navigate to vendor inventory page instead of showing popup
+    window.location.href = `/dashboard/vendors/${vendor._id}/inventory`;
   };
 
   const filteredPublicVendors = publicVendors.filter((vendor) =>
@@ -330,65 +310,6 @@ export default function VendorsPage() {
                 </div>
               </TabsContent>
             </Tabs>
-
-            {/* View Products Dialog */}
-            <Dialog open={isProductsOpen} onOpenChange={setIsProductsOpen}>
-              <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>
-                    {selectedVendor?.name} - Products
-                  </DialogTitle>
-                  <DialogDescription>
-                    View all products from this vendor
-                  </DialogDescription>
-                </DialogHeader>
-                
-                <div className="space-y-4 py-4">
-                  {loadingProducts ? (
-                    <div className="text-center py-8">
-                      <p className="text-muted-foreground">Loading products...</p>
-                    </div>
-                  ) : vendorProducts.length === 0 ? (
-                    <div className="text-center py-8">
-                      <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground">No products found</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {vendorProducts.map((product) => (
-                        <Card key={product._id}>
-                          <CardContent className="p-4">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <h3 className="font-medium">{product.name}</h3>
-                                  {!product.isApproved && (
-                                    <Badge variant="warning">Pending Approval</Badge>
-                                  )}
-                                  {product.isApproved && (
-                                    <Badge variant="success">Approved</Badge>
-                                  )}
-                                </div>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  SKU: {product.sku}
-                                </p>
-                                {product.description && (
-                                  <p className="text-sm mt-2">{product.description}</p>
-                                )}
-                                <div className="flex gap-4 mt-2 text-sm">
-                                  <span>Stock: {product.stock}</span>
-                                  <span>Cost: {product.currency} {product.unitCost}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
 
             {/* Invite Vendor Dialog */}
             <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>

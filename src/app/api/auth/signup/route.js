@@ -4,6 +4,7 @@ import User from '@/models/User';
 import Vendor from '@/models/Vendor';
 import TeamMember from '@/models/TeamMember';
 import bcrypt from 'bcryptjs';
+import { validatePassword } from '@/lib/password-validation';
 
 export async function POST(request) {
   try {
@@ -15,6 +16,15 @@ export async function POST(request) {
     // Validation
     if (!email || !password || !name) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    // Validate password strength
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
+      return NextResponse.json({ 
+        error: 'Password does not meet security requirements', 
+        details: passwordValidation.errors 
+      }, { status: 400 });
     }
 
     // Check if this is an invitation signup

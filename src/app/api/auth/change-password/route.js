@@ -4,6 +4,7 @@ import { authOptions } from '../../auth/[...nextauth]/route';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import bcrypt from 'bcryptjs';
+import { validatePassword } from '@/lib/password-validation';
 
 export async function POST(request) {
   try {
@@ -21,8 +22,13 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Current and new password are required' }, { status: 400 });
     }
 
-    if (newPassword.length < 6) {
-      return NextResponse.json({ error: 'New password must be at least 6 characters' }, { status: 400 });
+    // Validate new password strength
+    const passwordValidation = validatePassword(newPassword);
+    if (!passwordValidation.isValid) {
+      return NextResponse.json({ 
+        error: 'New password does not meet security requirements', 
+        details: passwordValidation.errors 
+      }, { status: 400 });
     }
 
     const user = await User.findById(session.user.id);

@@ -37,6 +37,7 @@ import { format } from "date-fns";
 export default function OrdersPage() {
   const { data: session } = useSession();
   const [orders, setOrders] = useState([]);
+  const [vendorPurchases, setVendorPurchases] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -112,12 +113,22 @@ export default function OrdersPage() {
       } else {
         toast.error(data.error || "Failed to fetch orders");
       }
+
+      // If user is a public vendor, also fetch vendor purchases
+      if (session?.user?.role === 'public_vendor') {
+        const purchasesResponse = await fetch('/api/vendor-purchases?forVendor=true');
+        const purchasesData = await purchasesResponse.json();
+        
+        if (purchasesResponse.ok) {
+          setVendorPurchases(purchasesData.purchases || []);
+        }
+      }
     } catch (error) {
       toast.error("An error occurred while fetching orders");
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, selectedAccount]);
+  }, [startDate, endDate, selectedAccount, session]);
 
   // useEffect hooks after function definitions
   useEffect(() => {
@@ -736,6 +747,77 @@ export default function OrdersPage() {
                       )}
                     </p>
                   </div>
+                </div>
+              </Card>
+            )}
+
+            {/* Vendor Purchases Section - Only for Public Vendors */}
+            {session?.user?.role === 'public_vendor' && vendorPurchases.length > 0 && (
+              <Card>
+                <div className="p-6 border-b">
+                  <h2 className="text-xl font-semibold">Customer Purchase Orders</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Orders placed by customers for your products
+                  </p>
+                </div>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Product</TableHead>
+                        <TableHead>SKU</TableHead>
+                        <TableHead className="text-right">Quantity</TableHead>
+                        <TableHead className="text-right">Total Cost</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Documents</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {vendorPurchases.map((purchase) => (
+                        <TableRow key={purchase._id}>
+                          <TableCell className="whitespace-nowrap">
+                            {format(new Date(purchase.createdAt), "dd/MM/yyyy HH:mm")}
+                          </TableCell>
+                          <TableCell>
+                            {purchase.adminId?.name || 'Unknown'}
+                            <br />
+                            <span className="text-xs text-muted-foreground">{purchase.adminId?.email}</span>
+                          </TableCell>
+                          <TableCell>{purchase.productSnapshot?.name || 'N/A'}</TableCell>
+                          <TableCell className="font-mono text-sm">{purchase.productSnapshot?.sku || 'N/A'}</TableCell>
+                          <TableCell className="text-right font-medium">{purchase.quantity}</TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {purchase.productSnapshot?.currency || 'USD'} {purchase.totalCost.toFixed(2)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={
+                              purchase.status === 'completed' ? 'success' :
+                              purchase.status === 'processing' ? 'default' :
+                              purchase.status === 'cancelled' ? 'destructive' :
+                              'secondary'
+                            }>
+                              {purchase.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1 text-xs">
+                              {purchase.paymentProofs?.length > 0 && (
+                                <span className="text-green-600">✓ Payment Proof ({purchase.paymentProofs.length})</span>
+                              )}
+                              {purchase.shippingLabels?.length > 0 && (
+                                <span className="text-blue-600">✓ Shipping Label ({purchase.shippingLabels.length})</span>
+                              )}
+                              {purchase.packingSlips?.length > 0 && (
+                                <span className="text-purple-600">✓ Packing Slip ({purchase.packingSlips.length})</span>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               </Card>
             )}
