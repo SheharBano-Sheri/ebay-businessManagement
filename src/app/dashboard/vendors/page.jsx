@@ -322,7 +322,7 @@ export default function VendorsPage() {
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label htmlFor="vendor-name">Contact Name</Label>
+                    <Label htmlFor="vendor-name">Name</Label>
                     <Input
                       id="vendor-name"
                       placeholder="John Doe"

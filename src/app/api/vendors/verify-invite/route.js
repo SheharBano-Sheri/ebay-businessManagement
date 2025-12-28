@@ -27,7 +27,7 @@ export async function GET(request) {
       valid: true,
       invitation: {
         email: vendor.email,
-        name: vendor.contactName || vendor.name,
+        name: vendor.Name || vendor.name,
         businessName: vendor.name,
         inviterName: inviter?.name || inviter?.email || 'Business Owner',
         description: vendor.description

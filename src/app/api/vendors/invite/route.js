@@ -41,7 +41,7 @@ export async function POST(request) {
     const newVendor = await Vendor.create({
       name: businessName || name,
       email,
-      contactName: name,
+      Name: name,
       vendorType: 'public',
       status: 'pending',
       inviteToken,

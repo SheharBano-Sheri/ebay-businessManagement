@@ -10,7 +10,7 @@ const VendorSchema = new mongoose.Schema({
     trim: true,
     lowercase: true
   },
-  contactName: {
+  Name: {
     type: String
   },
   phone: {
