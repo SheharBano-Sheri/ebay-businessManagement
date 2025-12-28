@@ -27,7 +27,7 @@ const vendorPurchaseSchema = new mongoose.Schema({
     currency: String,
   },
   // --- CONTACT & DELIVERY FIELDS ---
-  contactName: {
+  Name: {
     type: String,
     required: true
   },

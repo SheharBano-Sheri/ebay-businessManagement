@@ -8,6 +8,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -31,7 +32,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Upload, Plus, Download, Search, Calendar, Package } from "lucide-react";
+import {
+  Upload,
+  Plus,
+  Download,
+  Search,
+  Calendar,
+  Package,
+} from "lucide-react";
 import { format } from "date-fns";
 
 export default function OrdersPage() {
@@ -49,30 +57,35 @@ export default function OrdersPage() {
   const [abortController, setAbortController] = useState(null);
   const [uploadProgress, setUploadProgress] = useState({
     isOpen: false,
-    status: 'uploading',
+    status: "uploading",
     imported: 0,
     errors: 0,
     total: 0,
     errorDetails: [],
     currentRow: 0,
-    percentage: 0
+    percentage: 0,
   });
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
-  const [exportDateRange, setExportDateRange] = useState({ start: '', end: '' });
+  const [exportDateRange, setExportDateRange] = useState({
+    start: "",
+    end: "",
+  });
   const [replaceMode, setReplaceMode] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+
+  const isPublicVendor = session?.user?.role === "public_vendor";
 
   // Define functions before useEffect hooks
   const recalculateGrossProfit = useCallback(async () => {
     try {
       const response = await fetch("/api/orders/recalculate", {
-        method: "POST"
+        method: "POST",
       });
       const data = await response.json();
-      
+
       if (response.ok && data.updated > 0) {
         console.log(`Recalculated gross profit for ${data.updated} orders`);
-        localStorage.setItem('grossProfitRecalculated', 'true');
+        localStorage.setItem("grossProfitRecalculated", "true");
       }
     } catch (error) {
       console.error("Failed to recalculate gross profit:", error);
@@ -83,7 +96,7 @@ export default function OrdersPage() {
     try {
       const response = await fetch("/api/accounts");
       const data = await response.json();
-      
+
       if (response.ok) {
         console.log("Accounts fetched:", data.accounts);
         setAccounts(data.accounts || []);
@@ -100,6 +113,22 @@ export default function OrdersPage() {
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
+
+      // If user is a public vendor, fetch ONLY vendor purchases and skip standard orders
+      if (session?.user?.role === "public_vendor") {
+        const purchasesResponse = await fetch(
+          "/api/vendor-purchases?forVendor=true"
+        );
+        const purchasesData = await purchasesResponse.json();
+
+        if (purchasesResponse.ok) {
+          setVendorPurchases(purchasesData.purchases || []);
+        }
+        setLoading(false);
+        return; // Skip standard order fetch for public vendors
+      }
+
+      // Logic for Business Users
       let url = "/api/orders?";
       if (startDate) url += `startDate=${startDate}&`;
       if (endDate) url += `endDate=${endDate}&`;
@@ -107,21 +136,11 @@ export default function OrdersPage() {
 
       const response = await fetch(url);
       const data = await response.json();
-      
+
       if (response.ok) {
         setOrders(data.orders);
       } else {
         toast.error(data.error || "Failed to fetch orders");
-      }
-
-      // If user is a public vendor, also fetch vendor purchases
-      if (session?.user?.role === 'public_vendor') {
-        const purchasesResponse = await fetch('/api/vendor-purchases?forVendor=true');
-        const purchasesData = await purchasesResponse.json();
-        
-        if (purchasesResponse.ok) {
-          setVendorPurchases(purchasesData.purchases || []);
-        }
       }
     } catch (error) {
       toast.error("An error occurred while fetching orders");
@@ -133,278 +152,295 @@ export default function OrdersPage() {
   // useEffect hooks after function definitions
   useEffect(() => {
     if (session) {
-      fetchAccounts();
-      // Recalculate gross profit for existing orders (one-time fix)
-      const hasRecalculated = localStorage.getItem('grossProfitRecalculated');
-      if (!hasRecalculated) {
-        recalculateGrossProfit();
+      // Only fetch accounts if NOT a public vendor
+      if (session.user.role !== "public_vendor") {
+        fetchAccounts();
+        const hasRecalculated = localStorage.getItem("grossProfitRecalculated");
+        if (!hasRecalculated) {
+          recalculateGrossProfit();
+        }
       }
-    }
-  }, [session, fetchAccounts, recalculateGrossProfit]);
-
-  useEffect(() => {
-    if (session) {
       fetchOrders();
     }
-  }, [session, fetchOrders]);
+  }, [session, fetchAccounts, fetchOrders, recalculateGrossProfit]);
 
-  const handleFileUpload = useCallback(async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFileUpload = useCallback(
+    async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
 
-    // Check if an account is selected
-    if (selectedAccount === "all") {
-      toast.error("Please select a specific account before uploading CSV");
-      e.target.value = ""; // Reset file input
-      return;
-    }
-
-    if (accounts.length === 0) {
-      toast.error("Please create an account first in the Accounts page");
-      e.target.value = ""; // Reset file input
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("accountId", selectedAccount);
-    
-    // Add replace mode parameters
-    if (replaceMode) {
-      formData.append("replaceMode", "true");
-      if (startDate) formData.append("startDate", startDate);
-      if (endDate) formData.append("endDate", endDate);
-      
-      // Inform user about replace mode
-      if (startDate && endDate) {
-        toast.info(`Replace mode: Will delete existing orders from ${startDate} to ${endDate}`);
-      } else {
-        toast.warning("Replace mode: Will delete ALL existing orders for this account!");
+      // Check if an account is selected
+      if (selectedAccount === "all") {
+        toast.error("Please select a specific account before uploading CSV");
+        e.target.value = ""; // Reset file input
+        return;
       }
-    }
 
-    // Create abort controller for cancellation
-    const controller = new AbortController();
-    setAbortController(controller);
+      if (accounts.length === 0) {
+        toast.error("Please create an account first in the Accounts page");
+        e.target.value = ""; // Reset file input
+        return;
+      }
 
-    // Show progress dialog with simulated progress
-    setUploadProgress({
-      isOpen: true,
-      status: 'uploading',
-      imported: 0,
-      errors: 0,
-      total: 0,
-      errorDetails: [],
-      currentRow: 0,
-      percentage: 0
-    });
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("accountId", selectedAccount);
 
-    // Simulate progress updates with smoother increments
-    let progressInterval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev.percentage >= 95) {
-          clearInterval(progressInterval);
-          return prev;
+      // Add replace mode parameters
+      if (replaceMode) {
+        formData.append("replaceMode", "true");
+        if (startDate) formData.append("startDate", startDate);
+        if (endDate) formData.append("endDate", endDate);
+
+        if (startDate && endDate) {
+          toast.info(
+            `Replace mode: Will delete existing orders from ${startDate} to ${endDate}`
+          );
+        } else {
+          toast.warning(
+            "Replace mode: Will delete ALL existing orders for this account!"
+          );
         }
-        // Update status messages based on progress
-        let newStatus = 'uploading';
-        if (prev.percentage >= 80) {
-          newStatus = 'validating';
-        } else if (prev.percentage >= 50) {
-          newStatus = 'processing';
-        }
-        
-        return {
-          ...prev,
-          percentage: Math.min(prev.percentage + 2, 95),
-          status: newStatus
-        };
-      });
-    }, 150);
+      }
 
-    try {
-      const response = await fetch("/api/orders/upload", {
-        method: "POST",
-        body: formData,
-        signal: controller.signal
+      const controller = new AbortController();
+      setAbortController(controller);
+
+      setUploadProgress({
+        isOpen: true,
+        status: "uploading",
+        imported: 0,
+        errors: 0,
+        total: 0,
+        errorDetails: [],
+        currentRow: 0,
+        percentage: 0,
       });
 
-      const data = await response.json();
-      clearInterval(progressInterval);
+      let progressInterval = setInterval(() => {
+        setUploadProgress((prev) => {
+          if (prev.percentage >= 95) {
+            clearInterval(progressInterval);
+            return prev;
+          }
+          let newStatus = "uploading";
+          if (prev.percentage >= 80) {
+            newStatus = "validating";
+          } else if (prev.percentage >= 50) {
+            newStatus = "processing";
+          }
 
-      if (response.ok) {
-        setUploadProgress({
-          isOpen: true,
-          status: 'complete',
-          imported: data.imported || 0,
-          errors: data.errors || 0,
-          total: (data.imported || 0) + (data.errors || 0),
-          errorDetails: data.errorDetails || [],
-          currentRow: (data.imported || 0) + (data.errors || 0),
-          percentage: 100
+          return {
+            ...prev,
+            percentage: Math.min(prev.percentage + 2, 95),
+            status: newStatus,
+          };
         });
-        
-        toast.success(`Imported ${data.imported} orders successfully!`);
-        if (data.errors > 0) {
-          toast.warning(`${data.errors} rows had errors. Check the upload dialog for details.`);
+      }, 150);
+
+      try {
+        const response = await fetch("/api/orders/upload", {
+          method: "POST",
+          body: formData,
+          signal: controller.signal,
+        });
+
+        const data = await response.json();
+        clearInterval(progressInterval);
+
+        if (response.ok) {
+          setUploadProgress({
+            isOpen: true,
+            status: "complete",
+            imported: data.imported || 0,
+            errors: data.errors || 0,
+            total: (data.imported || 0) + (data.errors || 0),
+            errorDetails: data.errorDetails || [],
+            currentRow: (data.imported || 0) + (data.errors || 0),
+            percentage: 100,
+          });
+
+          toast.success(`Imported ${data.imported} orders successfully!`);
+          if (data.errors > 0) {
+            toast.warning(
+              `${data.errors} rows had errors. Check the upload dialog for details.`
+            );
+          }
+          fetchOrders();
+        } else {
+          setUploadProgress({
+            isOpen: true,
+            status: "error",
+            imported: 0,
+            errors: 0,
+            total: 0,
+            errorDetails: [{ error: data.error || "Upload failed" }],
+            currentRow: 0,
+            percentage: 0,
+          });
+          toast.error(data.error || "Upload failed");
         }
-        fetchOrders();
-      } else {
-        setUploadProgress({
-          isOpen: true,
-          status: 'error',
-          imported: 0,
-          errors: 0,
-          total: 0,
-          errorDetails: [{ error: data.error || "Upload failed" }],
-          currentRow: 0,
-          percentage: 0
-        });
-        toast.error(data.error || "Upload failed");
-        if (data.details) {
-          console.error("Upload error details:", data.details);
+      } catch (error) {
+        clearInterval(progressInterval);
+        if (error.name === "AbortError") {
+          setUploadProgress({
+            isOpen: true,
+            status: "error",
+            imported: 0,
+            errors: 0,
+            total: 0,
+            errorDetails: [{ error: "Upload cancelled by user" }],
+            currentRow: 0,
+            percentage: 0,
+          });
+          toast.info("Upload cancelled");
+        } else {
+          setUploadProgress({
+            isOpen: true,
+            status: "error",
+            imported: 0,
+            errors: 0,
+            total: 0,
+            errorDetails: [{ error: "An error occurred during upload" }],
+            currentRow: 0,
+            percentage: 0,
+          });
+          toast.error("An error occurred during upload");
         }
+      } finally {
+        e.target.value = "";
+        setAbortController(null);
       }
-    } catch (error) {
-      clearInterval(progressInterval);
-      if (error.name === 'AbortError') {
-        setUploadProgress({
-          isOpen: true,
-          status: 'error',
-          imported: 0,
-          errors: 0,
-          total: 0,
-          errorDetails: [{ error: "Upload cancelled by user" }],
-          currentRow: 0,
-          percentage: 0
-        });
-        toast.info("Upload cancelled");
-      } else {
-        setUploadProgress({
-          isOpen: true,
-          status: 'error',
-          imported: 0,
-          errors: 0,
-          total: 0,
-          errorDetails: [{ error: "An error occurred during upload" }],
-          currentRow: 0,
-          percentage: 0
-        });
-        toast.error("An error occurred during upload");
-        console.error(error);
-      }
-    } finally {
-      e.target.value = ""; // Reset file input
-      setAbortController(null);
-    }
-  }, [selectedAccount, accounts, replaceMode, startDate, endDate, fetchOrders]);
+    },
+    [selectedAccount, accounts, replaceMode, startDate, endDate, fetchOrders]
+  );
 
   const handleCancelUpload = useCallback(() => {
     if (abortController) {
       abortController.abort();
     }
-    setUploadProgress(prev => ({ ...prev, isOpen: false }));
+    setUploadProgress((prev) => ({ ...prev, isOpen: false }));
   }, [abortController]);
 
-  const formatCurrency = useCallback((amount) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency,
-    }).format(amount);
-  }, [currency]);
+  const formatCurrency = useCallback(
+    (amount) => {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: currency,
+      }).format(amount);
+    },
+    [currency]
+  );
 
   const handleCellEdit = useCallback(async (orderId, field, value) => {
     try {
       const parsedValue = parseFloat(value) || 0;
       const response = await fetch(`/api/orders/${orderId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [field]: parsedValue })
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: parsedValue }),
       });
 
       if (response.ok) {
-        setOrders(prevOrders => 
-          prevOrders.map(order => 
+        setOrders((prevOrders) =>
+          prevOrders.map((order) =>
             order._id === orderId ? { ...order, [field]: parsedValue } : order
           )
         );
-        toast.success('Order updated successfully');
+        toast.success("Order updated successfully");
       } else {
-        toast.error('Failed to update order');
+        toast.error("Failed to update order");
       }
     } catch (error) {
-      toast.error('Error updating order');
+      toast.error("Error updating order");
     }
     setEditingCell(null);
   }, []);
 
-  // Define filteredOrders before functions that use it
   const filteredOrders = useMemo(() => {
     if (!searchTerm) return orders;
     const searchLower = searchTerm.toLowerCase();
-    return orders.filter((order) => (
-      order.orderNumber.toLowerCase().includes(searchLower) ||
-      order.sku.toLowerCase().includes(searchLower) ||
-      order.itemName.toLowerCase().includes(searchLower)
-    ));
+    return orders.filter(
+      (order) =>
+        order.orderNumber.toLowerCase().includes(searchLower) ||
+        order.sku.toLowerCase().includes(searchLower) ||
+        order.itemName.toLowerCase().includes(searchLower)
+    );
   }, [orders, searchTerm]);
 
-  const handleExportCurrentView = useCallback((e) => {
-    e?.preventDefault();
-    if (filteredOrders.length === 0) {
-      toast.error('No orders to export');
-      return;
-    }
-    if (isExporting) return;
-    
-    setIsExporting(true);
-    try {
-      exportOrdersToCSV(filteredOrders, 'current-view');
-    } finally {
-      setTimeout(() => setIsExporting(false), 1000);
-    }
-  }, [filteredOrders, isExporting]);
-
-  const handleExportDateRange = useCallback((e) => {
-    e?.preventDefault();
-    if (!exportDateRange.start || !exportDateRange.end) {
-      toast.error('Please select both start and end dates');
-      return;
-    }
-    if (isExporting) return;
-
-    setIsExporting(true);
-    try {
-      const rangeOrders = orders.filter(order => {
-        const orderDate = new Date(order.orderDate);
-        const start = new Date(exportDateRange.start);
-        const end = new Date(exportDateRange.end);
-        end.setHours(23, 59, 59, 999);
-        return orderDate >= start && orderDate <= end;
-      });
-
-      if (rangeOrders.length === 0) {
-        toast.error('No orders found in selected date range');
+  const handleExportCurrentView = useCallback(
+    (e) => {
+      e?.preventDefault();
+      if (filteredOrders.length === 0) {
+        toast.error("No orders to export");
         return;
       }
+      if (isExporting) return;
 
-      exportOrdersToCSV(rangeOrders, `${exportDateRange.start}_to_${exportDateRange.end}`);
-      setIsExportDialogOpen(false);
-      toast.success(`Exported ${rangeOrders.length} orders`);
-    } finally {
-      setTimeout(() => setIsExporting(false), 1000);
-    }
-  }, [exportDateRange, isExporting, orders]);
+      setIsExporting(true);
+      try {
+        exportOrdersToCSV(filteredOrders, "current-view");
+      } finally {
+        setTimeout(() => setIsExporting(false), 1000);
+      }
+    },
+    [filteredOrders, isExporting]
+  );
+
+  const handleExportDateRange = useCallback(
+    (e) => {
+      e?.preventDefault();
+      if (!exportDateRange.start || !exportDateRange.end) {
+        toast.error("Please select both start and end dates");
+        return;
+      }
+      if (isExporting) return;
+
+      setIsExporting(true);
+      try {
+        const rangeOrders = orders.filter((order) => {
+          const orderDate = new Date(order.orderDate);
+          const start = new Date(exportDateRange.start);
+          const end = new Date(exportDateRange.end);
+          end.setHours(23, 59, 59, 999);
+          return orderDate >= start && orderDate <= end;
+        });
+
+        if (rangeOrders.length === 0) {
+          toast.error("No orders found in selected date range");
+          return;
+        }
+
+        exportOrdersToCSV(
+          rangeOrders,
+          `${exportDateRange.start}_to_${exportDateRange.end}`
+        );
+        setIsExportDialogOpen(false);
+        toast.success(`Exported ${rangeOrders.length} orders`);
+      } finally {
+        setTimeout(() => setIsExporting(false), 1000);
+      }
+    },
+    [exportDateRange, isExporting, orders]
+  );
 
   const exportOrdersToCSV = (ordersToExport, filename) => {
-
     const headers = [
-      'Order Number', 'Date', 'SKU', 'Item Name', 'Quantity', 
-      'Gross Amount', 'Fees', 'Sourcing Cost', 'Shipping Cost', 
-      'Gross Profit', 'Currency', 'Transaction Type'
+      "Order Number",
+      "Date",
+      "SKU",
+      "Item Name",
+      "Quantity",
+      "Gross Amount",
+      "Fees",
+      "Sourcing Cost",
+      "Shipping Cost",
+      "Gross Profit",
+      "Currency",
+      "Transaction Type",
     ];
 
-    const csvData = ordersToExport.map(order => [
+    const csvData = ordersToExport.map((order) => [
       order.orderNumber,
       new Date(order.orderDate).toLocaleDateString(),
       order.sku,
@@ -414,27 +450,174 @@ export default function OrdersPage() {
       Math.abs(order.fees),
       order.sourcingCost,
       order.shippingCost,
-      order.grossAmount - Math.abs(order.fees) - order.sourcingCost - order.shippingCost,
+      order.grossAmount -
+        Math.abs(order.fees) -
+        order.sourcingCost -
+        order.shippingCost,
       order.currency,
-      order.transactionType
+      order.transactionType,
     ]);
 
     const csvContent = [
-      headers.join(','),
-      ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
-    ].join('\n');
+      headers.join(","),
+      ...csvData.map((row) => row.map((cell) => `"${cell}"`).join(",")),
+    ].join("\n");
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csvContent], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = `orders-${filename}-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `orders-${filename}-${
+      new Date().toISOString().split("T")[0]
+    }.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
   };
 
+  // --- RENDER FOR PUBLIC VENDORS ---
+  if (isPublicVendor) {
+    return (
+      <SidebarProvider
+        style={{
+          "--sidebar-width": "calc(var(--spacing) * 72)",
+          "--header-height": "calc(var(--spacing) * 12)",
+        }}
+      >
+        <AppSidebar variant="inset" />
+        <SidebarInset>
+          <SiteHeader />
+          <div className="flex flex-1 flex-col p-4 lg:p-6">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-3xl font-bold tracking-tight">
+                    Incoming Orders
+                  </h1>
+                  <p className="text-muted-foreground">
+                    Manage orders received from your business partners
+                  </p>
+                </div>
+              </div>
+
+              {/* Vendor Purchases Table */}
+              <Card>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Product</TableHead>
+                        <TableHead>SKU</TableHead>
+                        <TableHead className="text-right">Quantity</TableHead>
+                        <TableHead className="text-right">Total Cost</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Documents</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {loading ? (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center py-8">
+                            <div className="flex flex-col items-center gap-2">
+                              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+                              <span className="text-muted-foreground">
+                                Loading incoming orders...
+                              </span>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : vendorPurchases.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center py-12">
+                            <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                              <Package className="h-12 w-12 opacity-50" />
+                              <p className="text-lg font-medium">
+                                No incoming orders yet
+                              </p>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        vendorPurchases.map((purchase) => (
+                          <TableRow key={purchase._id}>
+                            <TableCell className="whitespace-nowrap">
+                              {format(
+                                new Date(purchase.createdAt),
+                                "dd/MM/yyyy HH:mm"
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {purchase.adminId?.name || "Unknown"}
+                              <br />
+                              <span className="text-xs text-muted-foreground">
+                                {purchase.adminId?.email}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              {purchase.productSnapshot?.name || "N/A"}
+                            </TableCell>
+                            <TableCell className="font-mono text-sm">
+                              {purchase.productSnapshot?.sku || "N/A"}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {purchase.quantity}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold">
+                              {purchase.productSnapshot?.currency || "USD"}{" "}
+                              {purchase.totalCost.toFixed(2)}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={
+                                  purchase.status === "completed"
+                                    ? "success"
+                                    : purchase.status === "processing"
+                                    ? "default"
+                                    : purchase.status === "cancelled"
+                                    ? "destructive"
+                                    : "secondary"
+                                }
+                              >
+                                {purchase.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1 text-xs">
+                                {purchase.paymentProofs?.length > 0 && (
+                                  <span className="text-green-600">
+                                    ✓ Payment Proof
+                                  </span>
+                                )}
+                                {purchase.shippingLabels?.length > 0 && (
+                                  <span className="text-blue-600">
+                                    ✓ Shipping Label
+                                  </span>
+                                )}
+                                {purchase.packingSlips?.length > 0 && (
+                                  <span className="text-purple-600">
+                                    ✓ Packing Slip
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </Card>
+            </div>
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    );
+  }
+
+  // --- RENDER FOR BUSINESS USERS (Standard View) ---
   return (
     <SidebarProvider
       style={{
@@ -456,11 +639,19 @@ export default function OrdersPage() {
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={handleExportCurrentView} disabled={filteredOrders.length === 0 || isExporting}>
+                <Button
+                  variant="outline"
+                  onClick={handleExportCurrentView}
+                  disabled={filteredOrders.length === 0 || isExporting}
+                >
                   <Download className="mr-2 h-4 w-4" />
-                  {isExporting ? 'Exporting...' : 'Export Current View'}
+                  {isExporting ? "Exporting..." : "Export Current View"}
                 </Button>
-                <Button variant="outline" onClick={() => setIsExportDialogOpen(true)} disabled={isExporting}>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsExportDialogOpen(true)}
+                  disabled={isExporting}
+                >
                   <Download className="mr-2 h-4 w-4" />
                   Export Date Range
                 </Button>
@@ -474,7 +665,12 @@ export default function OrdersPage() {
                     />
                     <span>Replace existing orders</span>
                   </label>
-                  <Button variant="outline" onClick={() => document.getElementById('csv-upload').click()}>
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      document.getElementById("csv-upload").click()
+                    }
+                  >
                     <Upload className="mr-2 h-4 w-4" />
                     Upload CSV
                   </Button>
@@ -514,7 +710,10 @@ export default function OrdersPage() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Account</label>
-                  <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+                  <Select
+                    value={selectedAccount}
+                    onValueChange={setSelectedAccount}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select account" />
                     </SelectTrigger>
@@ -558,12 +757,19 @@ export default function OrdersPage() {
               </div>
               {selectedAccount !== "all" && accounts.length > 0 && (
                 <div className="mt-3 text-sm text-muted-foreground">
-                  Selected account: <strong>{accounts.find(a => a._id === selectedAccount)?.accountName}</strong>
+                  Selected account:{" "}
+                  <strong>
+                    {
+                      accounts.find((a) => a._id === selectedAccount)
+                        ?.accountName
+                    }
+                  </strong>
                 </div>
               )}
               {accounts.length === 0 && (
                 <div className="mt-3 text-sm text-amber-600">
-                  No accounts found. Please create an account in the Accounts page before uploading orders.
+                  No accounts found. Please create an account in the Accounts
+                  page before uploading orders.
                 </div>
               )}
             </Card>
@@ -575,16 +781,30 @@ export default function OrdersPage() {
                   <TableHeader>
                     <TableRow className="bg-gradient-to-r from-primary/10 to-primary/5 border-b-2">
                       <TableHead className="font-bold border-r">DATE</TableHead>
-                      <TableHead className="font-bold border-r">ORDER #</TableHead>
+                      <TableHead className="font-bold border-r">
+                        ORDER #
+                      </TableHead>
                       <TableHead className="font-bold border-r">SKU</TableHead>
                       <TableHead className="font-bold border-r">ITEM</TableHead>
-                      <TableHead className="text-right font-bold border-r">QTY</TableHead>
+                      <TableHead className="text-right font-bold border-r">
+                        QTY
+                      </TableHead>
                       <TableHead className="font-bold border-r">TYPE</TableHead>
-                      <TableHead className="text-right font-bold border-r">GROSS AMOUNT</TableHead>
-                      <TableHead className="text-right font-bold border-r">FEES</TableHead>
-                      <TableHead className="text-right font-bold border-r">SOURCING COST</TableHead>
-                      <TableHead className="text-right font-bold border-r">SHIPPING COST</TableHead>
-                      <TableHead className="text-right font-bold">GROSS PROFIT</TableHead>
+                      <TableHead className="text-right font-bold border-r">
+                        GROSS AMOUNT
+                      </TableHead>
+                      <TableHead className="text-right font-bold border-r">
+                        FEES
+                      </TableHead>
+                      <TableHead className="text-right font-bold border-r">
+                        SOURCING COST
+                      </TableHead>
+                      <TableHead className="text-right font-bold border-r">
+                        SHIPPING COST
+                      </TableHead>
+                      <TableHead className="text-right font-bold">
+                        GROSS PROFIT
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -593,7 +813,9 @@ export default function OrdersPage() {
                         <TableCell colSpan={11} className="text-center py-8">
                           <div className="flex flex-col items-center gap-2">
                             <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-                            <span className="text-muted-foreground">Loading orders...</span>
+                            <span className="text-muted-foreground">
+                              Loading orders...
+                            </span>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -602,30 +824,50 @@ export default function OrdersPage() {
                         <TableCell colSpan={11} className="text-center py-12">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
                             <Package className="h-12 w-12 opacity-50" />
-                            <p className="text-lg font-medium">No orders found</p>
-                            <p className="text-sm">Upload a CSV file to get started</p>
+                            <p className="text-lg font-medium">
+                              No orders found
+                            </p>
+                            <p className="text-sm">
+                              Upload a CSV file to get started
+                            </p>
                           </div>
                         </TableCell>
                       </TableRow>
                     ) : (
                       filteredOrders.map((order, index) => (
-                        <TableRow 
+                        <TableRow
                           key={order._id}
-                          className={`hover:bg-muted/50 transition-colors ${index % 2 === 0 ? 'bg-background' : 'bg-muted/20'}`}
+                          className={`hover:bg-muted/50 transition-colors ${
+                            index % 2 === 0 ? "bg-background" : "bg-muted/20"
+                          }`}
                         >
                           <TableCell className="whitespace-nowrap border-r font-medium">
                             {format(new Date(order.orderDate), "dd/MM/yyyy")}
                           </TableCell>
-                          <TableCell className="font-semibold border-r text-primary">{order.orderNumber}</TableCell>
-                          <TableCell className="border-r font-mono text-sm">{order.sku}</TableCell>
-                          <TableCell className="max-w-xs truncate border-r" title={order.itemName}>{order.itemName}</TableCell>
-                          <TableCell className="text-right border-r font-medium">{order.orderedQty}</TableCell>
+                          <TableCell className="font-semibold border-r text-primary">
+                            {order.orderNumber}
+                          </TableCell>
+                          <TableCell className="border-r font-mono text-sm">
+                            {order.sku}
+                          </TableCell>
+                          <TableCell
+                            className="max-w-xs truncate border-r"
+                            title={order.itemName}
+                          >
+                            {order.itemName}
+                          </TableCell>
+                          <TableCell className="text-right border-r font-medium">
+                            {order.orderedQty}
+                          </TableCell>
                           <TableCell className="border-r">
-                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              order.transactionType === 'Order' || order.transactionType === 'Sale' 
-                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                                : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                            }`}>
+                            <span
+                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                order.transactionType === "Order" ||
+                                order.transactionType === "Sale"
+                                  ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                                  : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                              }`}
+                            >
                               {order.transactionType}
                             </span>
                           </TableCell>
@@ -643,18 +885,30 @@ export default function OrdersPage() {
                                 type="number"
                                 step="0.01"
                                 defaultValue={order.sourcingCost}
-                                onBlur={(e) => handleCellEdit(order._id, 'sourcingCost', e.target.value)}
+                                onBlur={(e) =>
+                                  handleCellEdit(
+                                    order._id,
+                                    "sourcingCost",
+                                    e.target.value
+                                  )
+                                }
                                 onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    handleCellEdit(order._id, 'sourcingCost', e.target.value);
+                                  if (e.key === "Enter") {
+                                    handleCellEdit(
+                                      order._id,
+                                      "sourcingCost",
+                                      e.target.value
+                                    );
                                   }
                                 }}
                                 autoFocus
                                 className="w-28 h-8 text-right"
                               />
                             ) : (
-                              <div 
-                                onClick={() => setEditingCell(`${order._id}-sourcingCost`)}
+                              <div
+                                onClick={() =>
+                                  setEditingCell(`${order._id}-sourcingCost`)
+                                }
                                 className="cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-950 px-2 py-1 rounded transition-colors font-medium text-orange-600 dark:text-orange-400"
                                 title="Click to edit"
                               >
@@ -668,18 +922,30 @@ export default function OrdersPage() {
                                 type="number"
                                 step="0.01"
                                 defaultValue={order.shippingCost}
-                                onBlur={(e) => handleCellEdit(order._id, 'shippingCost', e.target.value)}
+                                onBlur={(e) =>
+                                  handleCellEdit(
+                                    order._id,
+                                    "shippingCost",
+                                    e.target.value
+                                  )
+                                }
                                 onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    handleCellEdit(order._id, 'shippingCost', e.target.value);
+                                  if (e.key === "Enter") {
+                                    handleCellEdit(
+                                      order._id,
+                                      "shippingCost",
+                                      e.target.value
+                                    );
                                   }
                                 }}
                                 autoFocus
                                 className="w-28 h-8 text-right"
                               />
                             ) : (
-                              <div 
-                                onClick={() => setEditingCell(`${order._id}-shippingCost`)}
+                              <div
+                                onClick={() =>
+                                  setEditingCell(`${order._id}-shippingCost`)
+                                }
                                 className="cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-950 px-2 py-1 rounded transition-colors font-medium text-orange-600 dark:text-orange-400"
                                 title="Click to edit"
                               >
@@ -689,7 +955,12 @@ export default function OrdersPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             <span className="font-bold text-lg text-green-600 dark:text-green-400">
-                              {formatCurrency(order.grossAmount - Math.abs(order.fees) - order.sourcingCost - order.shippingCost)}
+                              {formatCurrency(
+                                order.grossAmount -
+                                  Math.abs(order.fees) -
+                                  order.sourcingCost -
+                                  order.shippingCost
+                              )}
                             </span>
                           </TableCell>
                         </TableRow>
@@ -709,27 +980,43 @@ export default function OrdersPage() {
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Orders</p>
-                    <p className="text-3xl font-bold text-primary">{filteredOrders.length}</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Total Orders
+                    </p>
+                    <p className="text-3xl font-bold text-primary">
+                      {filteredOrders.length}
+                    </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Gross Revenue</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Gross Revenue
+                    </p>
                     <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
                       {formatCurrency(
-                        filteredOrders.reduce((sum, o) => sum + o.grossAmount, 0)
+                        filteredOrders.reduce(
+                          (sum, o) => sum + o.grossAmount,
+                          0
+                        )
                       )}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Fees</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Total Fees
+                    </p>
                     <p className="text-3xl font-bold text-red-600 dark:text-red-400">
                       {formatCurrency(
-                        filteredOrders.reduce((sum, o) => sum + Math.abs(o.fees), 0)
+                        filteredOrders.reduce(
+                          (sum, o) => sum + Math.abs(o.fees),
+                          0
+                        )
                       )}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Costs</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Total Costs
+                    </p>
                     <p className="text-3xl font-bold text-orange-600 dark:text-orange-400">
                       {formatCurrency(
                         filteredOrders.reduce(
@@ -740,84 +1027,18 @@ export default function OrdersPage() {
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Net Profit</p>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Net Profit
+                    </p>
                     <p className="text-3xl font-bold text-green-600 dark:text-green-400">
                       {formatCurrency(
-                        filteredOrders.reduce((sum, o) => sum + o.grossProfit, 0)
+                        filteredOrders.reduce(
+                          (sum, o) => sum + o.grossProfit,
+                          0
+                        )
                       )}
                     </p>
                   </div>
-                </div>
-              </Card>
-            )}
-
-            {/* Vendor Purchases Section - Only for Public Vendors */}
-            {session?.user?.role === 'public_vendor' && vendorPurchases.length > 0 && (
-              <Card>
-                <div className="p-6 border-b">
-                  <h2 className="text-xl font-semibold">Customer Purchase Orders</h2>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Orders placed by customers for your products
-                  </p>
-                </div>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Customer</TableHead>
-                        <TableHead>Product</TableHead>
-                        <TableHead>SKU</TableHead>
-                        <TableHead className="text-right">Quantity</TableHead>
-                        <TableHead className="text-right">Total Cost</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Documents</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {vendorPurchases.map((purchase) => (
-                        <TableRow key={purchase._id}>
-                          <TableCell className="whitespace-nowrap">
-                            {format(new Date(purchase.createdAt), "dd/MM/yyyy HH:mm")}
-                          </TableCell>
-                          <TableCell>
-                            {purchase.adminId?.name || 'Unknown'}
-                            <br />
-                            <span className="text-xs text-muted-foreground">{purchase.adminId?.email}</span>
-                          </TableCell>
-                          <TableCell>{purchase.productSnapshot?.name || 'N/A'}</TableCell>
-                          <TableCell className="font-mono text-sm">{purchase.productSnapshot?.sku || 'N/A'}</TableCell>
-                          <TableCell className="text-right font-medium">{purchase.quantity}</TableCell>
-                          <TableCell className="text-right font-semibold">
-                            {purchase.productSnapshot?.currency || 'USD'} {purchase.totalCost.toFixed(2)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={
-                              purchase.status === 'completed' ? 'success' :
-                              purchase.status === 'processing' ? 'default' :
-                              purchase.status === 'cancelled' ? 'destructive' :
-                              'secondary'
-                            }>
-                              {purchase.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col gap-1 text-xs">
-                              {purchase.paymentProofs?.length > 0 && (
-                                <span className="text-green-600">✓ Payment Proof ({purchase.paymentProofs.length})</span>
-                              )}
-                              {purchase.shippingLabels?.length > 0 && (
-                                <span className="text-blue-600">✓ Shipping Label ({purchase.shippingLabels.length})</span>
-                              )}
-                              {purchase.packingSlips?.length > 0 && (
-                                <span className="text-purple-600">✓ Packing Slip ({purchase.packingSlips.length})</span>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
                 </div>
               </Card>
             )}
@@ -825,39 +1046,60 @@ export default function OrdersPage() {
         </div>
       </SidebarInset>
 
-      {/* Upload Progress Dialog */}
-      <Dialog open={uploadProgress.isOpen} onOpenChange={(open) => setUploadProgress(prev => ({ ...prev, isOpen: open }))}>
+      {/* Upload Progress Dialog - Only for Business Users */}
+      <Dialog
+        open={uploadProgress.isOpen}
+        onOpenChange={(open) =>
+          setUploadProgress((prev) => ({ ...prev, isOpen: open }))
+        }
+      >
+        {/* ... (Existing dialog content remains the same) ... */}
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {(uploadProgress.status === 'uploading' || uploadProgress.status === 'processing' || uploadProgress.status === 'validating') && 'Uploading CSV...'}
-              {uploadProgress.status === 'complete' && 'Upload Complete'}
-              {uploadProgress.status === 'error' && 'Upload Failed'}
+              {(uploadProgress.status === "uploading" ||
+                uploadProgress.status === "processing" ||
+                uploadProgress.status === "validating") &&
+                "Uploading CSV..."}
+              {uploadProgress.status === "complete" && "Upload Complete"}
+              {uploadProgress.status === "error" && "Upload Failed"}
             </DialogTitle>
             <DialogDescription>
-              {(uploadProgress.status === 'uploading' || uploadProgress.status === 'processing' || uploadProgress.status === 'validating') && 'Please wait while we process your file...'}
-              {uploadProgress.status === 'complete' && 'Your orders have been imported.'}
-              {uploadProgress.status === 'error' && 'An error occurred during upload.'}
+              {(uploadProgress.status === "uploading" ||
+                uploadProgress.status === "processing" ||
+                uploadProgress.status === "validating") &&
+                "Please wait while we process your file..."}
+              {uploadProgress.status === "complete" &&
+                "Your orders have been imported."}
+              {uploadProgress.status === "error" &&
+                "An error occurred during upload."}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
-            {(uploadProgress.status === 'uploading' || uploadProgress.status === 'processing' || uploadProgress.status === 'validating') && (
+            {(uploadProgress.status === "uploading" ||
+              uploadProgress.status === "processing" ||
+              uploadProgress.status === "validating") && (
               <div className="flex flex-col items-center justify-center space-y-4">
                 <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-                
+
                 {/* Progress Bar */}
                 <div className="w-full space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">
-                      {uploadProgress.status === 'uploading' && 'Reading CSV file...'}
-                      {uploadProgress.status === 'processing' && 'Processing order data...'}
-                      {uploadProgress.status === 'validating' && 'Validating and importing...'}
+                      {uploadProgress.status === "uploading" &&
+                        "Reading CSV file..."}
+                      {uploadProgress.status === "processing" &&
+                        "Processing order data..."}
+                      {uploadProgress.status === "validating" &&
+                        "Validating and importing..."}
                     </span>
-                    <span className="font-semibold text-primary">{uploadProgress.percentage}%</span>
+                    <span className="font-semibold text-primary">
+                      {uploadProgress.percentage}%
+                    </span>
                   </div>
                   <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
-                    <div 
+                    <div
                       className="h-full bg-primary transition-all duration-300 ease-out"
                       style={{ width: `${uploadProgress.percentage}%` }}
                     ></div>
@@ -866,16 +1108,21 @@ export default function OrdersPage() {
 
                 <div className="text-center space-y-1">
                   <p className="text-sm font-medium animate-pulse">
-                    {uploadProgress.status === 'uploading' && 'Starting upload...'}
-                    {uploadProgress.status === 'processing' && 'Processing order records...'}
-                    {uploadProgress.status === 'validating' && 'Finalizing import...'}
+                    {uploadProgress.status === "uploading" &&
+                      "Starting upload..."}
+                    {uploadProgress.status === "processing" &&
+                      "Processing order records..."}
+                    {uploadProgress.status === "validating" &&
+                      "Finalizing import..."}
                   </p>
-                  <p className="text-xs text-muted-foreground">This may take a few moments for large files</p>
+                  <p className="text-xs text-muted-foreground">
+                    This may take a few moments for large files
+                  </p>
                 </div>
               </div>
             )}
 
-            {uploadProgress.status === 'complete' && (
+            {uploadProgress.status === "complete" && (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="rounded-lg border p-3">
@@ -884,22 +1131,29 @@ export default function OrdersPage() {
                   </div>
                   <div className="rounded-lg border bg-green-50 p-3">
                     <p className="text-sm text-green-700">Imported</p>
-                    <p className="text-2xl font-bold text-green-600">{uploadProgress.imported}</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      {uploadProgress.imported}
+                    </p>
                   </div>
                 </div>
-                
+
                 {uploadProgress.errors > 0 && (
                   <div className="rounded-lg border bg-red-50 p-3">
-                    <p className="text-sm font-medium text-red-700">Errors: {uploadProgress.errors}</p>
+                    <p className="text-sm font-medium text-red-700">
+                      Errors: {uploadProgress.errors}
+                    </p>
                     <div className="mt-2 max-h-40 overflow-y-auto text-xs text-red-600">
-                      {uploadProgress.errorDetails.slice(0, 10).map((err, idx) => (
-                        <div key={idx} className="py-1">
-                          Row {err.row}: {err.error}
-                        </div>
-                      ))}
+                      {uploadProgress.errorDetails
+                        .slice(0, 10)
+                        .map((err, idx) => (
+                          <div key={idx} className="py-1">
+                            Row {err.row}: {err.error}
+                          </div>
+                        ))}
                       {uploadProgress.errorDetails.length > 10 && (
                         <div className="py-1 font-medium">
-                          ...and {uploadProgress.errorDetails.length - 10} more errors
+                          ...and {uploadProgress.errorDetails.length - 10} more
+                          errors
                         </div>
                       )}
                     </div>
@@ -908,23 +1162,28 @@ export default function OrdersPage() {
               </div>
             )}
 
-            {uploadProgress.status === 'error' && (
+            {uploadProgress.status === "error" && (
               <div className="rounded-lg border bg-red-50 p-4">
                 <p className="text-sm text-red-700">
-                  {uploadProgress.errorDetails[0]?.error || 'Unknown error occurred'}
+                  {uploadProgress.errorDetails[0]?.error ||
+                    "Unknown error occurred"}
                 </p>
               </div>
             )}
           </div>
 
           <div className="flex justify-end gap-2">
-            {uploadProgress.status === 'uploading' && (
+            {uploadProgress.status === "uploading" && (
               <Button variant="destructive" onClick={handleCancelUpload}>
                 Cancel Upload
               </Button>
             )}
-            {uploadProgress.status !== 'uploading' && (
-              <Button onClick={() => setUploadProgress(prev => ({ ...prev, isOpen: false }))}>
+            {uploadProgress.status !== "uploading" && (
+              <Button
+                onClick={() =>
+                  setUploadProgress((prev) => ({ ...prev, isOpen: false }))
+                }
+              >
                 Close
               </Button>
             )}
@@ -941,33 +1200,47 @@ export default function OrdersPage() {
               Select a date range to export orders
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Start Date</label>
               <Input
                 type="date"
                 value={exportDateRange.start}
-                onChange={(e) => setExportDateRange(prev => ({ ...prev, start: e.target.value }))}
+                onChange={(e) =>
+                  setExportDateRange((prev) => ({
+                    ...prev,
+                    start: e.target.value,
+                  }))
+                }
               />
             </div>
-            
+
             <div className="space-y-2">
               <label className="text-sm font-medium">End Date</label>
               <Input
                 type="date"
                 value={exportDateRange.end}
-                onChange={(e) => setExportDateRange(prev => ({ ...prev, end: e.target.value }))}
+                onChange={(e) =>
+                  setExportDateRange((prev) => ({
+                    ...prev,
+                    end: e.target.value,
+                  }))
+                }
               />
             </div>
           </div>
 
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setIsExportDialogOpen(false)} disabled={isExporting}>
+            <Button
+              variant="outline"
+              onClick={() => setIsExportDialogOpen(false)}
+              disabled={isExporting}
+            >
               Cancel
             </Button>
             <Button onClick={handleExportDateRange} disabled={isExporting}>
-              {isExporting ? 'Exporting...' : 'Export'}
+              {isExporting ? "Exporting..." : "Export"}
             </Button>
           </div>
         </DialogContent>

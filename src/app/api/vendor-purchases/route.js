@@ -29,11 +29,11 @@ export async function POST(request) {
     const notes = formData.get('notes') || '';
 
     // --- NEW FIELDS ---
-    const contactName = formData.get('contactName');
+    const Name = formData.get('Name');
     const contactNumber = formData.get('contactNumber');
     const deliveryAddress = formData.get('deliveryAddress');
 
-    if (!contactName || !contactNumber || !deliveryAddress) {
+    if (!Name || !contactNumber || !deliveryAddress) {
         return NextResponse.json({ error: 'Contact details and Delivery Address are required' }, { status: 400 });
     }
     // ------------------
@@ -132,9 +132,9 @@ export async function POST(request) {
         unitCost: product.unitCost,
         currency: product.currency || 'USD',
       },
-      contactName,
+      Name,
       contactNumber,
-      deliveryAddress, // Added field
+      deliveryAddress,
       quantity,
       totalCost,
       paymentProofs,
@@ -183,12 +183,15 @@ export async function GET(request) {
     if (forVendor === 'true' && session.user.role === 'public_vendor') {
       // Find the vendor record for this public vendor user
       const Vendor = (await import('@/models/Vendor')).default;
-      const vendorRecord = await Vendor.findOne({ userId: session.user.id, vendorType: 'public' });
+      
+      // FIX: Changed 'userId' to 'publicVendorUserId' to match schema
+      const vendorRecord = await Vendor.findOne({ publicVendorUserId: session.user.id, vendorType: 'public' });
       
       if (vendorRecord) {
         query.vendorId = vendorRecord._id;
       } else {
         // No vendor record, return empty array
+        console.log("No public vendor record found for user:", session.user.id);
         return NextResponse.json({ purchases: [] });
       }
     } else {

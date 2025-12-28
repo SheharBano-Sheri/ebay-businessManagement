@@ -50,7 +50,7 @@ export default function PurchaseProductPage() {
   const [notes, setNotes] = useState("");
 
   // --- NEW STATE FOR CONTACT DETAILS ---
-  const [contactName, setContactName] = useState("");
+  const [Name, setName] = useState("");
   const [contactNumber, setContactNumber] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   // ------------------------------------
@@ -182,8 +182,8 @@ export default function PurchaseProductPage() {
     }
 
     // --- NEW VALIDATION ---
-    if (!contactName.trim()) {
-      toast.error("Contact Name is required");
+    if (!Name.trim()) {
+      toast.error("Name is required");
       return;
     }
     if (!contactNumber.trim()) {
@@ -223,7 +223,7 @@ export default function PurchaseProductPage() {
       formData.append("notes", notes);
 
       // --- APPEND NEW FIELDS ---
-      formData.append("contactName", contactName);
+      formData.append("Name", Name);
       formData.append("contactNumber", contactNumber);
       formData.append("deliveryAddress", deliveryAddress);
       // -------------------------
@@ -474,17 +474,17 @@ export default function PurchaseProductPage() {
                   <div className="border-b pb-6 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="contactName">
-                          Contact Name <span className="text-red-500">*</span>
+                        <Label htmlFor="Name">
+                          Name <span className="text-red-500">*</span>
                         </Label>
                         <div className="relative">
                           <User className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                           <Input
-                            id="contactName"
+                            id="Name"
                             placeholder="Full Name"
                             className="pl-9"
-                            value={contactName}
-                            onChange={(e) => setContactName(e.target.value)}
+                            value={Name}
+                            onChange={(e) => setName(e.target.value)}
                             required
                           />
                         </div>
