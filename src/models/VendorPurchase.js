@@ -26,6 +26,16 @@ const vendorPurchaseSchema = new mongoose.Schema({
     unitCost: Number,
     currency: String,
   },
+  // --- NEW FIELDS ---
+  Name: {
+    type: String,
+    required: true
+  },
+  contactNumber: {
+    type: String,
+    required: true
+  },
+  // ------------------
   quantity: {
     type: Number,
     required: true,

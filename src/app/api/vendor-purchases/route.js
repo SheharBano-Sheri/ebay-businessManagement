@@ -27,6 +27,15 @@ export async function POST(request) {
     const productId = formData.get('productId');
     const quantity = parseInt(formData.get('quantity'));
     const notes = formData.get('notes') || '';
+
+    // --- NEW FIELDS ---
+    const Name = formData.get('Name');
+    const contactNumber = formData.get('contactNumber');
+
+    if (!Name || !contactNumber) {
+        return NextResponse.json({ error: 'Name and Number are required' }, { status: 400 });
+    }
+    // ------------------
     
     // Validate required fields
     if (!vendorId || !productId || !quantity || quantity <= 0) {
@@ -122,6 +131,8 @@ export async function POST(request) {
         unitCost: product.unitCost,
         currency: product.currency || 'USD',
       },
+      Name,   // Saved here
+      contactNumber, // Saved here
       quantity,
       totalCost,
       paymentProofs,

@@ -30,6 +30,8 @@ import {
   Package,
   AlertCircle,
   CheckCircle2,
+  User,
+  Phone,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -45,6 +47,11 @@ export default function PurchaseProductPage() {
 
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState("");
+
+  // --- NEW STATE FOR CONTACT DETAILS ---
+  const [Name, setName] = useState("");
+  const [contactNumber, setContactNumber] = useState("");
+  // ------------------------------------
 
   // File states
   const [paymentProofs, setPaymentProofs] = useState([]);
@@ -172,6 +179,17 @@ export default function PurchaseProductPage() {
       return;
     }
 
+    // --- NEW VALIDATION ---
+    if (!Name.trim()) {
+      toast.error("Name is required");
+      return;
+    }
+    if (!contactNumber.trim()) {
+      toast.error("Contact Number is required");
+      return;
+    }
+    // ----------------------
+
     // Validation based on dynamic requirements
     if (requirements.paymentProof && paymentProofs.length === 0) {
       toast.error("Payment proof is required by the vendor");
@@ -197,6 +215,11 @@ export default function PurchaseProductPage() {
       formData.append("productId", productId);
       formData.append("quantity", quantity);
       formData.append("notes", notes);
+
+      // --- APPEND NEW FIELDS ---
+      formData.append("Name", Name);
+      formData.append("contactNumber", contactNumber);
+      // -------------------------
 
       // Add all payment proofs
       paymentProofs.forEach((file) => {
@@ -436,13 +459,50 @@ export default function PurchaseProductPage() {
                 <CardHeader>
                   <CardTitle>Purchase Details</CardTitle>
                   <CardDescription>
-                    Enter quantity and upload required documents
+                    Enter your contact information and upload required documents
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                  {/* --- NEW SECTION: Contact Information --- */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-b pb-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="Name">
+                        Name <span className="text-red-500">*</span>
+                      </Label>
+                      <div className="relative">
+                        <User className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="Name"
+                          placeholder="Full Name"
+                          className="pl-9"
+                          value={Name}
+                          onChange={(e) => setName(e.target.value)}
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="contactNumber">
+                        Contact Number <span className="text-red-500">*</span>
+                      </Label>
+                      <div className="relative">
+                        <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="contactNumber"
+                          placeholder="+1 234 567 890"
+                          className="pl-9"
+                          value={contactNumber}
+                          onChange={(e) => setContactNumber(e.target.value)}
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {/* -------------------------------------- */}
+
                   {/* Quantity */}
                   <div className="space-y-2">
-                    <Label htmlFor="quantity">Quantity *</Label>
+                    <Label htmlFor="quantity">Quantity <span className="text-red-500">*</span></Label>
                     <Input
                       id="quantity"
                       type="number"
