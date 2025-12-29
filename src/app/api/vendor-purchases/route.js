@@ -5,6 +5,7 @@ import connectDB from '@/lib/mongodb';
 import VendorPurchase from '@/models/VendorPurchase';
 import Product from '@/models/Product';
 import Vendor from '@/models/Vendor';
+import mongoose from 'mongoose'; // Import mongoose for ObjectId validation
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
@@ -172,46 +173,79 @@ export async function GET(request) {
 
     const adminId = session.user.adminId || session.user.id;
     const { searchParams } = new URL(request.url);
+    
+    // Query Parameters
     const vendorId = searchParams.get('vendorId');
     const status = searchParams.get('status');
-    const forVendor = searchParams.get('forVendor'); // New parameter to fetch purchases for vendor
+    const forVendor = searchParams.get('forVendor'); 
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+    const search = searchParams.get('search');
     
     // Build query
     let query = {};
     
-    // If forVendor=true and user is a public_vendor, fetch purchases where they are the vendor
+    // 1. Ownership & Role Filtering
     if (forVendor === 'true' && session.user.role === 'public_vendor') {
       // Find the vendor record for this public vendor user
       const Vendor = (await import('@/models/Vendor')).default;
-      
-      // FIX: Changed 'userId' to 'publicVendorUserId' to match schema
       const vendorRecord = await Vendor.findOne({ publicVendorUserId: session.user.id, vendorType: 'public' });
       
       if (vendorRecord) {
         query.vendorId = vendorRecord._id;
       } else {
-        // No vendor record, return empty array
         console.log("No public vendor record found for user:", session.user.id);
         return NextResponse.json({ purchases: [] });
       }
     } else {
       // Regular admin viewing their own purchases
       query.adminId = adminId;
-      
       if (vendorId) {
         query.vendorId = vendorId;
       }
     }
     
-    if (status) {
+    // 2. Status Filtering
+    if (status && status !== 'all') {
       query.status = status;
+    }
+
+    // 3. Date Range Filtering
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) {
+        query.createdAt.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999); // Include the entire end day
+        query.createdAt.$lte = end;
+      }
+    }
+
+    // 4. Search Functionality
+    if (search) {
+      const searchRegex = { $regex: search, $options: 'i' };
+      const orConditions = [
+        { Name: searchRegex },
+        { contactNumber: searchRegex },
+        { 'productSnapshot.name': searchRegex },
+        { 'productSnapshot.sku': searchRegex }
+      ];
+
+      // If search is a valid MongoDB ID, allow searching by Exact ID match
+      if (mongoose.Types.ObjectId.isValid(search)) {
+        orConditions.push({ _id: search });
+      }
+
+      query.$or = orConditions;
     }
     
     // Fetch purchases
     const purchases = await VendorPurchase.find(query)
       .populate('vendorId', 'name email')
       .populate('productId', 'sku name')
-      .populate('adminId', 'name email') // Populate buyer info for vendors
+      .populate('adminId', 'name email')
       .populate('createdBy', 'name email')
       .sort({ createdAt: -1 });
     

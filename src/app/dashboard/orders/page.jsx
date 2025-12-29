@@ -61,11 +61,15 @@ export default function OrdersPage() {
   const [vendorPurchases, setVendorPurchases] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Filters State
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAccount, setSelectedAccount] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all"); // New: for vendors
   const [currency, setCurrency] = useState("USD");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+
   const [editingCell, setEditingCell] = useState(null);
   const [abortController, setAbortController] = useState(null);
   const [uploadProgress, setUploadProgress] = useState({
@@ -125,11 +129,15 @@ export default function OrdersPage() {
     try {
       setLoading(true);
 
-      // If user is a public vendor, fetch ONLY vendor purchases and skip standard orders
+      // --- LOGIC FOR PUBLIC VENDOR ---
       if (session?.user?.role === "public_vendor") {
-        const purchasesResponse = await fetch(
-          "/api/vendor-purchases?forVendor=true"
-        );
+        let url = "/api/vendor-purchases?forVendor=true";
+        if (startDate) url += `&startDate=${startDate}`;
+        if (endDate) url += `&endDate=${endDate}`;
+        if (statusFilter !== "all") url += `&status=${statusFilter}`;
+        if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
+
+        const purchasesResponse = await fetch(url);
         const purchasesData = await purchasesResponse.json();
 
         if (purchasesResponse.ok) {
@@ -139,7 +147,7 @@ export default function OrdersPage() {
         return; // Skip standard order fetch for public vendors
       }
 
-      // Logic for Business Users
+      // --- LOGIC FOR BUSINESS USERS ---
       let url = "/api/orders?";
       if (startDate) url += `startDate=${startDate}&`;
       if (endDate) url += `endDate=${endDate}&`;
@@ -158,7 +166,7 @@ export default function OrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, selectedAccount, session]);
+  }, [startDate, endDate, selectedAccount, statusFilter, searchTerm, session]);
 
   // useEffect hooks after function definitions
   useEffect(() => {
@@ -174,8 +182,6 @@ export default function OrdersPage() {
       fetchOrders();
     }
   }, [session, fetchAccounts, fetchOrders, recalculateGrossProfit]);
-
-  // --- ORDER MANAGEMENT FUNCTIONS ---
 
   const handleStatusUpdate = async (orderId, newStatus) => {
     // Optimistic UI update
@@ -332,7 +338,7 @@ export default function OrdersPage() {
 
   const handleFileUpload = useCallback(
     async (e) => {
-      // ... (Existing CSV upload logic mostly unchanged)
+      // ... (Existing CSV logic same as before)
       const file = e.target.files?.[0];
       if (!file) return;
 
@@ -641,7 +647,7 @@ export default function OrdersPage() {
     window.URL.revokeObjectURL(url);
   };
 
-  // --- RENDER FOR PUBLIC VENDORS (UPDATED VIEW) ---
+  // --- RENDER FOR PUBLIC VENDORS (UPDATED VIEW WITH FILTERS) ---
   if (isPublicVendor) {
     return (
       <SidebarProvider
@@ -665,6 +671,59 @@ export default function OrdersPage() {
                   </p>
                 </div>
               </div>
+
+              {/* --- NEW: Filters for Public Vendor --- */}
+              <Card className="p-4 bg-muted/10 border shadow-sm">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Start Date</label>
+                    <Input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">End Date</label>
+                    <Input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Status</label>
+                    <Select
+                      value={statusFilter}
+                      onValueChange={setStatusFilter}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Statuses" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="processing">Processing</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Search</label>
+                    <div className="relative">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search name, SKU..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-8"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </Card>
+              {/* -------------------------------------- */}
 
               {/* Vendor Purchases Table */}
               <Card className="border shadow-sm">
@@ -718,11 +777,10 @@ export default function OrdersPage() {
                                 </div>
                                 <div>
                                   <p className="text-lg font-medium text-foreground">
-                                    No orders yet
+                                    No orders found
                                   </p>
                                   <p className="text-sm">
-                                    New orders from your partners will appear
-                                    here.
+                                    Try adjusting your filters.
                                   </p>
                                 </div>
                               </div>
@@ -821,7 +879,7 @@ export default function OrdersPage() {
                                 </div>
                               </TableCell>
 
-                              {/* Status - Now with Select */}
+                              {/* Status */}
                               <TableCell className="align-top">
                                 <Select
                                   defaultValue={purchase.status}
@@ -862,7 +920,6 @@ export default function OrdersPage() {
                               {/* Documents & Actions */}
                               <TableCell className="align-top">
                                 <div className="flex flex-col gap-2">
-                                  {/* Invoice Generator Button */}
                                   <button
                                     onClick={() =>
                                       handleDownloadInvoice(purchase)
@@ -931,6 +988,7 @@ export default function OrdersPage() {
         "--header-height": "calc(var(--spacing) * 12)",
       }}
     >
+      {/* ... (Existing Business User JSX remains identical to previous turn) ... */}
       <AppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader />
@@ -1359,7 +1417,6 @@ export default function OrdersPage() {
           setUploadProgress((prev) => ({ ...prev, isOpen: open }))
         }
       >
-        {/* ... (Existing dialog content remains the same) ... */}
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
