@@ -51,6 +51,7 @@ import {
   FileText,
   CheckCircle2,
   Truck,
+  Printer,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -173,6 +174,133 @@ export default function OrdersPage() {
       fetchOrders();
     }
   }, [session, fetchAccounts, fetchOrders, recalculateGrossProfit]);
+
+  // --- INVOICE GENERATION FUNCTION ---
+  const handleDownloadInvoice = (order) => {
+    const orderDate = new Date(order.createdAt).toLocaleDateString();
+    const orderId = order._id.slice(-6).toUpperCase();
+    const currency = order.productSnapshot?.currency || "USD";
+    const total = order.totalCost.toFixed(2);
+
+    // Vendor Info (User's own info if they are the vendor)
+    const vendorName = order.vendorId?.name || "Vendor";
+    const vendorEmail = order.vendorId?.email || "";
+
+    const invoiceHTML = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Invoice #${orderId}</title>
+        <style>
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #333; max-width: 800px; margin: 0 auto; }
+          .header { display: flex; justify-content: space-between; border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 30px; }
+          .logo { font-size: 28px; font-weight: bold; color: #1a1a1a; }
+          .invoice-details { text-align: right; }
+          .invoice-details h1 { margin: 0 0 5px 0; font-size: 24px; color: #666; }
+          .meta { color: #888; font-size: 14px; }
+          .addresses { display: flex; justify-content: space-between; margin-bottom: 40px; }
+          .address-box { width: 45%; }
+          .address-box h3 { font-size: 14px; text-transform: uppercase; color: #888; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 10px; }
+          .address-box p { margin: 3px 0; font-size: 15px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+          th { background: #f9f9f9; text-align: left; padding: 12px; font-size: 13px; text-transform: uppercase; color: #666; border-bottom: 1px solid #ddd; }
+          td { padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; }
+          .text-right { text-align: right; }
+          .totals { margin-left: auto; width: 300px; }
+          .totals-row { display: flex; justify-content: space-between; padding: 8px 0; }
+          .totals-row.final { font-weight: bold; font-size: 18px; border-top: 2px solid #333; margin-top: 10px; padding-top: 15px; }
+          .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #999; border-top: 1px solid #eee; padding-top: 20px; }
+          @media print {
+            body { padding: 20px; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="logo">${vendorName}</div>
+          <div class="invoice-details">
+            <h1>INVOICE</h1>
+            <p class="meta">#${orderId}</p>
+            <p class="meta">Date: ${orderDate}</p>
+          </div>
+        </div>
+
+        <div class="addresses">
+          <div class="address-box">
+            <h3>From</h3>
+            <p><strong>${vendorName}</strong></p>
+            <p>${vendorEmail}</p>
+          </div>
+          <div class="address-box">
+            <h3>Bill To / Ship To</h3>
+            <p><strong>${order.Name}</strong></p>
+            <p>${order.contactNumber}</p>
+            <p style="white-space: pre-line;">${order.deliveryAddress}</p>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Item / Description</th>
+              <th>SKU</th>
+              <th class="text-right">Qty</th>
+              <th class="text-right">Unit Price</th>
+              <th class="text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong>${order.productSnapshot?.name || "Product"}</strong>
+                ${
+                  order.notes
+                    ? `<br><small style="color:#888">Note: ${order.notes}</small>`
+                    : ""
+                }
+              </td>
+              <td>${order.productSnapshot?.sku || "-"}</td>
+              <td class="text-right">${order.quantity}</td>
+              <td class="text-right">${currency} ${(
+      order.productSnapshot?.unitCost || 0
+    ).toFixed(2)}</td>
+              <td class="text-right">${currency} ${total}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="totals">
+          <div class="totals-row">
+            <span>Subtotal:</span>
+            <span>${currency} ${total}</span>
+          </div>
+          <div class="totals-row final">
+            <span>Total:</span>
+            <span>${currency} ${total}</span>
+          </div>
+        </div>
+
+        <div class="footer">
+          <p>Thank you for your business!</p>
+          <p>If you have any questions about this invoice, please contact ${vendorEmail}</p>
+        </div>
+
+        <script>
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
+      </html>
+    `;
+
+    const printWindow = window.open("", "_blank", "width=900,height=800");
+    if (printWindow) {
+      printWindow.document.write(invoiceHTML);
+      printWindow.document.close();
+    } else {
+      toast.error("Popup blocked. Please allow popups to print invoices.");
+    }
+  };
 
   const handleFileUpload = useCallback(
     async (e) => {
@@ -533,7 +661,7 @@ export default function OrdersPage() {
                           </TableHead>
                           <TableHead className="text-right">Amount</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead>Documents</TableHead>
+                          <TableHead>Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -627,13 +755,13 @@ export default function OrdersPage() {
                                 </div>
                               </TableCell>
 
-                              {/* Shipping Information (Clean & Decent Look) */}
+                              {/* Shipping Information */}
                               <TableCell className="align-top">
                                 <div className="flex flex-col gap-2 text-sm">
                                   <div className="flex items-center gap-2">
                                     <User className="h-3.5 w-3.5 text-muted-foreground" />
                                     <span className="font-medium">
-                                      {purchase.contactName || "N/A"}
+                                      {purchase.Name || "N/A"}
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-2">
@@ -684,44 +812,53 @@ export default function OrdersPage() {
                                 </Badge>
                               </TableCell>
 
-                              {/* Documents */}
+                              {/* Documents & Actions */}
                               <TableCell className="align-top">
-                                <div className="flex flex-col gap-1.5">
-                                  {purchase.paymentProofs?.length > 0 && (
-                                    <a
-                                      href={purchase.paymentProofs[0]?.path}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1.5 text-xs text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded-md border border-green-100 dark:border-green-900/30 hover:underline"
-                                    >
-                                      <CheckCircle2 className="h-3 w-3" />{" "}
-                                      Payment
-                                    </a>
-                                  )}
-                                  {purchase.shippingLabels?.length > 0 ? (
-                                    <a
-                                      href={purchase.shippingLabels[0]?.path}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1.5 text-xs text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded-md border border-blue-100 dark:border-blue-900/30 hover:underline"
-                                    >
-                                      <Truck className="h-3 w-3" /> Label
-                                    </a>
-                                  ) : (
-                                    <span className="text-xs text-muted-foreground italic pl-1">
-                                      No label
-                                    </span>
-                                  )}
-                                  {purchase.packingSlips?.length > 0 && (
-                                    <a
-                                      href={purchase.packingSlips[0]?.path}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1.5 text-xs text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded-md border border-purple-100 dark:border-purple-900/30 hover:underline"
-                                    >
-                                      <FileText className="h-3 w-3" /> Slip
-                                    </a>
-                                  )}
+                                <div className="flex flex-col gap-2">
+                                  {/* Invoice Generator Button */}
+                                  <button
+                                    onClick={() =>
+                                      handleDownloadInvoice(purchase)
+                                    }
+                                    className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm w-fit"
+                                  >
+                                    <Printer className="h-3.5 w-3.5" /> Print
+                                    Invoice
+                                  </button>
+
+                                  <div className="flex flex-wrap gap-1.5 mt-1">
+                                    {purchase.paymentProofs?.length > 0 && (
+                                      <a
+                                        href={purchase.paymentProofs[0]?.path}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1.5 text-xs text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded-md border border-green-100 dark:border-green-900/30 hover:underline"
+                                      >
+                                        <CheckCircle2 className="h-3 w-3" />{" "}
+                                        Payment
+                                      </a>
+                                    )}
+                                    {purchase.shippingLabels?.length > 0 && (
+                                      <a
+                                        href={purchase.shippingLabels[0]?.path}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1.5 text-xs text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded-md border border-blue-100 dark:border-blue-900/30 hover:underline"
+                                      >
+                                        <Truck className="h-3 w-3" /> Label
+                                      </a>
+                                    )}
+                                    {purchase.packingSlips?.length > 0 && (
+                                      <a
+                                        href={purchase.packingSlips[0]?.path}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1.5 text-xs text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 px-2 py-1 rounded-md border border-purple-100 dark:border-purple-900/30 hover:underline"
+                                      >
+                                        <FileText className="h-3 w-3" /> Slip
+                                      </a>
+                                    )}
+                                  </div>
                                 </div>
                               </TableCell>
                             </TableRow>
@@ -739,7 +876,7 @@ export default function OrdersPage() {
     );
   }
 
-  // --- RENDER FOR BUSINESS USERS (Standard View) ---
+  // --- RENDER FOR BUSINESS USERS (Standard View - Unchanged from previous logic) ---
   return (
     <SidebarProvider
       style={{
