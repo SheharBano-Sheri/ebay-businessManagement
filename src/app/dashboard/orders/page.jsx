@@ -175,7 +175,35 @@ export default function OrdersPage() {
     }
   }, [session, fetchAccounts, fetchOrders, recalculateGrossProfit]);
 
-  // --- INVOICE GENERATION FUNCTION ---
+  // --- ORDER MANAGEMENT FUNCTIONS ---
+
+  const handleStatusUpdate = async (orderId, newStatus) => {
+    // Optimistic UI update
+    const previousPurchases = [...vendorPurchases];
+    setVendorPurchases((prev) =>
+      prev.map((p) => (p._id === orderId ? { ...p, status: newStatus } : p))
+    );
+
+    try {
+      const response = await fetch(`/api/vendor-purchases/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (response.ok) {
+        toast.success(`Order marked as ${newStatus}`);
+      } else {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to update");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to update status");
+      setVendorPurchases(previousPurchases); // Revert on failure
+    }
+  };
+
   const handleDownloadInvoice = (order) => {
     const orderDate = new Date(order.createdAt).toLocaleDateString();
     const orderId = order._id.slice(-6).toUpperCase();
@@ -304,19 +332,19 @@ export default function OrdersPage() {
 
   const handleFileUpload = useCallback(
     async (e) => {
+      // ... (Existing CSV upload logic mostly unchanged)
       const file = e.target.files?.[0];
       if (!file) return;
 
-      // Check if an account is selected
       if (selectedAccount === "all") {
         toast.error("Please select a specific account before uploading CSV");
-        e.target.value = ""; // Reset file input
+        e.target.value = "";
         return;
       }
 
       if (accounts.length === 0) {
         toast.error("Please create an account first in the Accounts page");
-        e.target.value = ""; // Reset file input
+        e.target.value = "";
         return;
       }
 
@@ -324,7 +352,6 @@ export default function OrdersPage() {
       formData.append("file", file);
       formData.append("accountId", selectedAccount);
 
-      // Add replace mode parameters
       if (replaceMode) {
         formData.append("replaceMode", "true");
         if (startDate) formData.append("startDate", startDate);
@@ -794,22 +821,42 @@ export default function OrdersPage() {
                                 </div>
                               </TableCell>
 
-                              {/* Status */}
+                              {/* Status - Now with Select */}
                               <TableCell className="align-top">
-                                <Badge
-                                  className="capitalize shadow-none"
-                                  variant={
-                                    purchase.status === "completed"
-                                      ? "success"
-                                      : purchase.status === "processing"
-                                      ? "secondary"
-                                      : purchase.status === "cancelled"
-                                      ? "destructive"
-                                      : "outline"
+                                <Select
+                                  defaultValue={purchase.status}
+                                  onValueChange={(value) =>
+                                    handleStatusUpdate(purchase._id, value)
                                   }
                                 >
-                                  {purchase.status}
-                                </Badge>
+                                  <SelectTrigger
+                                    className={`w-[140px] h-8 text-xs capitalize ${
+                                      purchase.status === "completed"
+                                        ? "border-green-200 bg-green-50 text-green-700"
+                                        : purchase.status === "cancelled"
+                                        ? "border-red-200 bg-red-50 text-red-700"
+                                        : purchase.status === "processing"
+                                        ? "border-blue-200 bg-blue-50 text-blue-700"
+                                        : ""
+                                    }`}
+                                  >
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="pending">
+                                      Pending
+                                    </SelectItem>
+                                    <SelectItem value="processing">
+                                      Processing
+                                    </SelectItem>
+                                    <SelectItem value="completed">
+                                      Completed
+                                    </SelectItem>
+                                    <SelectItem value="cancelled">
+                                      Cancelled
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </TableCell>
 
                               {/* Documents & Actions */}
@@ -876,7 +923,7 @@ export default function OrdersPage() {
     );
   }
 
-  // --- RENDER FOR BUSINESS USERS (Standard View - Unchanged from previous logic) ---
+  // --- RENDER FOR BUSINESS USERS (Standard View) ---
   return (
     <SidebarProvider
       style={{
