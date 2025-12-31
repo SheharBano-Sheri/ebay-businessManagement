@@ -59,8 +59,16 @@ export async function GET(request) {
         
         if (vendor && vendor.vendorType === 'public') {
           // Public vendor - only show approved products
-          query.approvalStatus = 'approved';
-          console.log('Regular user - fetching approved products from public vendor');
+          // Also verify user has added this vendor
+          const hasAddedVendor = vendor.addedByUsers && vendor.addedByUsers.includes(adminId);
+          if (!hasAddedVendor) {
+            // User hasn't added this vendor, return empty
+            query._id = { $exists: false };
+            console.log('Regular user - vendor not added, returning empty');
+          } else {
+            query.approvalStatus = 'approved';
+            console.log('Regular user - fetching approved products from public vendor');
+          }
         } else {
           // Private/virtual vendor - show all products from their admin
           query.adminId = adminId;

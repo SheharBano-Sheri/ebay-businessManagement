@@ -49,9 +49,32 @@ export async function POST(request) {
     const adminId = session.user.adminId || session.user.id;
     
     console.log('Using adminId for vendor query:', adminId);
+    console.log('User role:', session.user.role);
+    console.log('User ID:', session.user.id);
     
-    // Get all vendors for matching
-    const vendors = await Vendor.find({ adminId });
+    // Get all vendors for matching based on user role
+    let vendors;
+    if (session.user.role === 'public_vendor') {
+      // For public vendors, get their own vendor
+      vendors = await Vendor.find({ 
+        publicVendorUserId: session.user.id 
+      });
+      console.log('Fetching vendors for public_vendor user');
+    } else if (session.user.role === 'master_admin') {
+      // Master admin can see all vendors
+      vendors = await Vendor.find({});
+      console.log('Fetching all vendors for master_admin');
+    } else {
+      // Regular users get their own vendors + public vendors they've added
+      vendors = await Vendor.find({ 
+        $or: [
+          { adminId: adminId }, // Their private/virtual vendors
+          { addedByUsers: adminId, vendorType: 'public', isActive: true, approvalStatus: 'approved' } // Public vendors they've added
+        ]
+      });
+      console.log('Fetching vendors for regular user (private/virtual + added public)');
+    }
+    
     const vendorMap = new Map();
     vendors.forEach(v => {
       vendorMap.set(v.name.toLowerCase().trim(), v._id);
@@ -132,6 +155,35 @@ export async function POST(request) {
           existingProduct.updatedAt = new Date();
           await existingProduct.save();
         } else {
+          // Get vendor details to determine approval status
+          const vendor = vendors.find(v => v._id.toString() === vendorId.toString());
+          
+          let isApproved = false;
+          let approvedBy = null;
+          let approvedAt = null;
+          let approvalStatus = 'pending';
+
+          // Auto-approve logic
+          if (vendor) {
+            if (vendor.vendorType === 'private' || vendor.vendorType === 'virtual') {
+              // Private and virtual vendors auto-approve
+              isApproved = true;
+              approvedBy = session.user.id;
+              approvedAt = new Date();
+              approvalStatus = 'approved';
+            } else if (vendor.vendorType === 'public' && vendor.autoApproveInventory === true) {
+              // Public vendor with auto-approve enabled
+              isApproved = true;
+              approvedBy = session.user.id;
+              approvedAt = new Date();
+              approvalStatus = 'approved';
+            } else if (vendor.vendorType === 'public') {
+              // Public vendor without auto-approve - requires manual approval
+              isApproved = false;
+              approvalStatus = 'pending';
+            }
+          }
+          
           // Create new product
           await Product.create({
             country,
@@ -146,7 +198,11 @@ export async function POST(request) {
             stock: parseInt(stock) || 0,
             unitCost: parseFloat(unitCost) || 0,
             currency: detectedCurrency,
-            isActive: true
+            isActive: true,
+            approvalStatus,
+            isApproved,
+            approvedBy,
+            approvedAt
           });
         }
 
