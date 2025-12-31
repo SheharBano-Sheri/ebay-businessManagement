@@ -208,10 +208,10 @@ export default function VendorInventoryPage() {
       <AppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader />
-        <div className="flex flex-1 flex-col p-4 lg:p-6">
+        <div className="flex flex-1 flex-col p-4 lg:p-6 w-full">
           <div className="space-y-4">
             {/* Page Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <Button
                   variant="outline"
@@ -221,12 +221,10 @@ export default function VendorInventoryPage() {
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <div>
-                  <h1 className="text-3xl font-bold tracking-tight">
-                    {vendor?.name || "Vendor"} - Inventory
+                  <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+                    {vendor?.name || "Vendor"}
                   </h1>
-                  <p className="text-muted-foreground">
-                    Browse and purchase products from this vendor
-                  </p>
+                  <p className="text-sm text-muted-foreground">Inventory</p>
                 </div>
               </div>
             </div>
@@ -252,8 +250,7 @@ export default function VendorInventoryPage() {
                     </p>
                   )}
 
-                  {/* --- REQUIREMENTS SECTION (Uses finalRequirements) --- */}
-                  {/* --- NEW STYLING: REQUIREMENTS SECTION --- */}
+                  {/* --- REQUIREMENTS SECTION --- */}
                   <div className="border rounded-xl p-5 bg-card/50 shadow-sm mt-4">
                     <h3 className="text-base font-semibold mb-4 flex items-center gap-2">
                       <div className="h-6 w-6 rounded-md bg-primary/10 flex items-center justify-center">
@@ -303,7 +300,6 @@ export default function VendorInventoryPage() {
                       </div>
                     )}
                   </div>
-                  {/* --------------------------------------------- */}
                 </CardContent>
               </Card>
             )}
@@ -321,7 +317,7 @@ export default function VendorInventoryPage() {
               </div>
             </Card>
 
-            {/* Products Table */}
+            {/* Products Table - Responsive & Compact */}
             <Card>
               <CardHeader>
                 <CardTitle>Products ({filteredProducts.length})</CardTitle>
@@ -329,7 +325,7 @@ export default function VendorInventoryPage() {
                   All available products from this vendor
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-0">
                 {loading ? (
                   <div className="text-center py-8">
                     <p className="text-muted-foreground">Loading products...</p>
@@ -344,57 +340,101 @@ export default function VendorInventoryPage() {
                     </p>
                   </div>
                 ) : (
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>SKU</TableHead>
-                          <TableHead>Product Name</TableHead>
-                          <TableHead>Description</TableHead>
-                          <TableHead className="text-right">Stock</TableHead>
-                          <TableHead className="text-right">
-                            Unit Cost
-                          </TableHead>
-                          <TableHead className="text-right">Action</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredProducts.map((product) => (
-                          <TableRow key={product._id}>
-                            <TableCell className="font-medium">
-                              {product.sku}
-                            </TableCell>
-                            <TableCell>{product.name}</TableCell>
-                            <TableCell className="max-w-xs truncate">
-                              {product.description || "—"}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {product.stock > 0 ? (
-                                <Badge variant="success">{product.stock}</Badge>
-                              ) : (
-                                <Badge variant="destructive">
-                                  Out of Stock
-                                </Badge>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {product.currency} {product.unitCost.toFixed(2)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                size="sm"
-                                onClick={() => handleBuy(product)}
-                                disabled={product.stock === 0}
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[15%] text-xs md:text-sm p-2 md:p-4">
+                          SKU
+                        </TableHead>
+                        <TableHead className="w-[25%] text-xs md:text-sm p-2 md:p-4">
+                          Name
+                        </TableHead>
+                        <TableHead className="w-[25%] text-xs md:text-sm p-2 md:p-4">
+                          Desc
+                        </TableHead>
+                        <TableHead className="w-[10%] text-right text-xs md:text-sm p-2 md:p-4">
+                          Stock
+                        </TableHead>
+                        <TableHead className="w-[15%] text-right text-xs md:text-sm p-2 md:p-4">
+                          Cost
+                        </TableHead>
+                        <TableHead className="w-[10%] text-right text-xs md:text-sm p-2 md:p-4">
+                          Action
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredProducts.map((product) => (
+                        <TableRow key={product._id}>
+                          {/* SKU: break-all ensures it wraps on tiny screens */}
+                          <TableCell className="font-medium text-xs md:text-sm p-2 md:p-4 align-top break-all">
+                            {product.sku}
+                          </TableCell>
+
+                          {/* Name: clamp to 2 lines to prevent vertical explosion */}
+                          <TableCell className="text-xs md:text-sm p-2 md:p-4 align-top">
+                            <div className="line-clamp-2" title={product.name}>
+                              {product.name}
+                            </div>
+                          </TableCell>
+
+                          {/* Description: Always visible, clamped to 2 lines */}
+                          <TableCell className="text-xs md:text-sm p-2 md:p-4 align-top">
+                            <div
+                              className="line-clamp-2 text-muted-foreground"
+                              title={product.description}
+                            >
+                              {product.description || "-"}
+                            </div>
+                          </TableCell>
+
+                          {/* Stock: Compact badge */}
+                          <TableCell className="text-right p-2 md:p-4 align-top">
+                            {product.stock > 0 ? (
+                              <Badge
+                                variant="success"
+                                className="px-1.5 py-0.5 text-[10px] md:text-xs whitespace-nowrap"
                               >
-                                <ShoppingCart className="mr-2 h-4 w-4" />
-                                Buy
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                                {product.stock}
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="destructive"
+                                className="px-1.5 py-0.5 text-[10px] md:text-xs whitespace-nowrap"
+                              >
+                                0
+                              </Badge>
+                            )}
+                          </TableCell>
+
+                          {/* Cost: Vertical stack on mobile to save width */}
+                          <TableCell className="text-right text-xs md:text-sm p-2 md:p-4 align-top">
+                            <div className="flex flex-col items-end">
+                              <span className="font-semibold">
+                                {product.unitCost.toFixed(2)}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground">
+                                {product.currency}
+                              </span>
+                            </div>
+                          </TableCell>
+
+                          {/* Action: Icon button on mobile, Full button on desktop */}
+                          <TableCell className="text-right p-2 md:p-4 align-top">
+                            <Button
+                              size="sm"
+                              onClick={() => handleBuy(product)}
+                              disabled={product.stock === 0}
+                              className="h-8 w-8 p-0 md:h-9 md:w-auto md:px-4"
+                            >
+                              <ShoppingCart className="h-3.5 w-3.5 md:mr-2" />
+                              <span className="hidden md:inline">Buy</span>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 )}
               </CardContent>
             </Card>
@@ -416,50 +456,54 @@ export default function VendorInventoryPage() {
                 </DialogHeader>
 
                 <div className="mt-4">
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Vendor SKU</TableHead>
-                          <TableHead>Product Name</TableHead>
-                          <TableHead>Stock</TableHead>
-                          <TableHead>Unit Cost</TableHead>
-                          <TableHead className="text-right">Action</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {products.map((product) => (
-                          <TableRow key={product._id}>
-                            <TableCell className="font-medium">
-                              {product.sku}
-                            </TableCell>
-                            <TableCell>{product.name}</TableCell>
-                            <TableCell>
-                              <Badge
-                                variant={
-                                  product.stock > 0 ? "success" : "destructive"
-                                }
-                              >
-                                {product.stock}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              {product.currency} {product.unitCost.toFixed(2)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleMapProduct(product)}
-                              >
-                                <LinkIcon className="mr-2 h-4 w-4" />
-                                Map to "{searchedSku}"
-                              </Button>
-                            </TableCell>
+                  <div className="rounded-md border overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Vendor SKU</TableHead>
+                            <TableHead>Product Name</TableHead>
+                            <TableHead>Stock</TableHead>
+                            <TableHead>Unit Cost</TableHead>
+                            <TableHead className="text-right">Action</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {products.map((product) => (
+                            <TableRow key={product._id}>
+                              <TableCell className="font-medium whitespace-nowrap">
+                                {product.sku}
+                              </TableCell>
+                              <TableCell>{product.name}</TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={
+                                    product.stock > 0
+                                      ? "success"
+                                      : "destructive"
+                                  }
+                                >
+                                  {product.stock}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {product.currency} {product.unitCost.toFixed(2)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleMapProduct(product)}
+                                >
+                                  <LinkIcon className="mr-2 h-4 w-4" />
+                                  Map to "{searchedSku}"
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
                 </div>
               </DialogContent>
