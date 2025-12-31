@@ -511,10 +511,10 @@ function InventoryContent() {
       }}
     >
       <AppSidebar variant="inset" />
-      <SidebarInset>
+      <SidebarInset className="flex flex-col">
         <SiteHeader />
-        <div className="flex flex-1 flex-col p-4 lg:p-6">
-          <div className="space-y-4">
+        <div className="flex-1 overflow-auto p-4 lg:p-6">
+          <div className="space-y-4 pb-6">
             {/* Page Header */}
             <div className="flex items-center justify-between">
               <div>
@@ -942,7 +942,7 @@ function InventoryContent() {
 
             {/* Inventory Table */}
             <Card className="border-2 shadow-lg">
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[calc(100vh-450px)] overflow-y-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-gradient-to-r from-primary/10 to-primary/5 border-b-2">
