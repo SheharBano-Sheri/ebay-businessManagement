@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]/route';
 import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
+// Import Vendor to look up profiles
+import Vendor from '@/models/Vendor';
 import { checkPermission } from '@/lib/permissions';
 
 export async function GET(request) {
@@ -44,9 +46,19 @@ export async function GET(request) {
       // Master admin sees ALL products (including pending)
       console.log('Master admin - fetching all products');
     } else if (session.user.role === 'public_vendor') {
-      // Public vendor sees only their own products (including pending)
-      query.addedBy = session.user.id;
-      console.log('Public vendor - fetching own products');
+      // --- FIX: Public vendor sees products linked to their Vendor Profile ---
+      // (Not just ones they added personally)
+      
+      const vendorProfile = await Vendor.findOne({ publicVendorUserId: session.user.id });
+      
+      if (vendorProfile) {
+        query.vendorId = vendorProfile._id;
+        console.log('Public vendor - fetching products for vendor ID:', vendorProfile._id);
+      } else {
+        // Fallback: If no vendor profile found (rare), fall back to addedBy
+        query.addedBy = session.user.id;
+        console.log('Public vendor (no profile) - fetching by addedBy');
+      }
     } else {
       // Regular users see:
       // 1. Approved products (approvalStatus='approved') from public vendors they've added
@@ -54,7 +66,6 @@ export async function GET(request) {
       
       if (vendorId) {
         // Viewing a specific vendor
-        const Vendor = (await import('@/models/Vendor')).default;
         const vendor = await Vendor.findById(vendorId);
         
         if (vendor && vendor.vendorType === 'public') {
@@ -77,8 +88,6 @@ export async function GET(request) {
       } else {
         // Viewing all products
         // This is complex: we want approved public vendor products + all private/virtual vendor products
-        // We'll handle this with an $or query
-        const Vendor = (await import('@/models/Vendor')).default;
         
         // Get all vendors the user has added
         const userVendors = await Vendor.find({ 
@@ -139,8 +148,6 @@ export async function GET(request) {
     return NextResponse.json({ products }, { status: 200 });
   } catch (error) {
     console.error('Get products error:', error);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
     return NextResponse.json({ 
       error: 'Internal server error', 
       details: error.message 
@@ -175,7 +182,6 @@ export async function POST(request) {
     }
 
     // Check if vendor exists and get its properties
-    const Vendor = (await import('@/models/Vendor')).default;
     const vendor = await Vendor.findById(vendorId);
     
     if (!vendor) {
@@ -190,33 +196,43 @@ export async function POST(request) {
     let approvedAt = null;
     let approvalStatus = 'pending'; // Default to pending
 
-    // Auto-approve logic:
-    if (vendor.vendorType === 'private' || vendor.vendorType === 'virtual') {
-      // Private and virtual vendors auto-approve
+    // --- APPROVAL LOGIC ---
+    
+    // 1. Master Admin: Always Auto-Approve
+    if (session.user.role === 'master_admin') {
+        isApproved = true;
+        approvedBy = session.user.id;
+        approvedAt = new Date();
+        approvalStatus = 'approved';
+        console.log('Product auto-approved: Creator is Master Admin');
+    }
+    // 2. Private/Virtual Vendors: Always Auto-Approve
+    else if (vendor.vendorType === 'private' || vendor.vendorType === 'virtual') {
       isApproved = true;
       approvedBy = session.user.id;
       approvedAt = new Date();
       approvalStatus = 'approved';
       console.log('Product auto-approved: private/virtual vendor');
-    } else if (vendor.vendorType === 'public' && vendor.autoApproveInventory === true) {
-      // Public vendor with auto-approve enabled
+    } 
+    // 3. Public Vendors: Check Settings
+    else if (vendor.vendorType === 'public' && vendor.autoApproveInventory === true) {
       isApproved = true;
-      approvedBy = session.user.id; // Should be master admin ID, but we'll use current user
+      approvedBy = session.user.id; // System/Self approval
       approvedAt = new Date();
       approvalStatus = 'approved';
       console.log('Product auto-approved: public vendor has auto-approve enabled');
-    } else if (vendor.vendorType === 'public') {
-      // Public vendor without auto-approve - requires manual approval
+    } 
+    // 4. Default: Manual Approval Required
+    else if (vendor.vendorType === 'public') {
       isApproved = false;
       approvalStatus = 'pending';
       console.log('Product requires manual approval by master admin');
     } else {
-      // Default: auto-approve
+      // Fallback
       isApproved = true;
       approvedBy = session.user.id;
       approvedAt = new Date();
       approvalStatus = 'approved';
-      console.log('Product auto-approved: default');
     }
 
     const product = await Product.create({
@@ -234,7 +250,7 @@ export async function POST(request) {
       currency: currency || 'USD',
       images: images || [],
       isActive: true,
-      approvalStatus, // Add approval status
+      approvalStatus,
       isApproved,
       approvedBy,
       approvedAt
@@ -244,12 +260,9 @@ export async function POST(request) {
     return NextResponse.json({ product }, { status: 201 });
   } catch (error) {
     console.error('Create product error:', error);
-    console.error('Error details:', error.message);
-    console.error('Error stack:', error.stack);
     return NextResponse.json({ 
       error: 'Internal server error', 
-      details: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      details: error.message
     }, { status: 500 });
   }
 }
