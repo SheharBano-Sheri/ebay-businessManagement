@@ -38,7 +38,19 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Search, Edit, Trash2, Package, Package2, AlertCircle, Download, Upload, FileDown, MoreVertical } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  Package,
+  Package2,
+  AlertCircle,
+  Download,
+  Upload,
+  FileDown,
+  MoreVertical,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,48 +92,47 @@ function InventoryContent() {
 
   // Country to currency mapping
   const countryCurrencyMap = {
-    'USA': 'USD',
-    'US': 'USD',
-    'United States': 'USD',
-    'UK': 'GBP',
-    'United Kingdom': 'GBP',
-    'Canada': 'CAD',
-    'Australia': 'AUD',
-    'India': 'INR',
-    'Japan': 'JPY',
-    'China': 'CNY',
-    'Germany': 'EUR',
-    'France': 'EUR',
-    'Italy': 'EUR',
-    'Spain': 'EUR',
-    'Netherlands': 'EUR',
-    'Belgium': 'EUR',
-    'Austria': 'EUR',
-    'Switzerland': 'CHF',
-    'Sweden': 'SEK',
-    'Norway': 'NOK',
-    'Denmark': 'DKK',
-    'Poland': 'PLN',
-    'Mexico': 'MXN',
-    'Brazil': 'BRL',
-    'Argentina': 'ARS',
-    'South Korea': 'KRW',
-    'Singapore': 'SGD',
-    'Hong Kong': 'HKD',
-    'New Zealand': 'NZD',
-    'UAE': 'AED',
-    'Saudi Arabia': 'SAR',
-    'South Africa': 'ZAR',
-    'Turkey': 'TRY',
-    'Russia': 'RUB',
+    USA: "USD",
+    US: "USD",
+    "United States": "USD",
+    UK: "GBP",
+    "United Kingdom": "GBP",
+    Canada: "CAD",
+    Australia: "AUD",
+    India: "INR",
+    Japan: "JPY",
+    China: "CNY",
+    Germany: "EUR",
+    France: "EUR",
+    Italy: "EUR",
+    Spain: "EUR",
+    Netherlands: "EUR",
+    Belgium: "EUR",
+    Austria: "EUR",
+    Switzerland: "CHF",
+    Sweden: "SEK",
+    Norway: "NOK",
+    Denmark: "DKK",
+    Poland: "PLN",
+    Mexico: "MXN",
+    Brazil: "BRL",
+    Argentina: "ARS",
+    "South Korea": "KRW",
+    Singapore: "SGD",
+    "Hong Kong": "HKD",
+    "New Zealand": "NZD",
+    UAE: "AED",
+    "Saudi Arabia": "SAR",
+    "South Africa": "ZAR",
+    Turkey: "TRY",
+    Russia: "RUB",
   };
 
   useEffect(() => {
     fetchProducts();
     fetchVendors();
-    
-    // Check if vendor filter is in URL
-    const vendorParam = searchParams.get('vendor');
+
+    const vendorParam = searchParams.get("vendor");
     if (vendorParam) {
       setSelectedVendor(vendorParam);
     }
@@ -132,12 +143,8 @@ function InventoryContent() {
       setLoading(true);
       const response = await fetch("/api/products");
       const data = await response.json();
-      
-      if (response.ok) {
-        setProducts(data.products);
-      } else {
-        toast.error(data.error || "Failed to fetch products");
-      }
+      if (response.ok) setProducts(data.products);
+      else toast.error(data.error || "Failed to fetch products");
     } catch (error) {
       toast.error("An error occurred while fetching products");
     } finally {
@@ -149,11 +156,7 @@ function InventoryContent() {
     try {
       const response = await fetch("/api/vendors");
       const data = await response.json();
-      
-      if (response.ok) {
-        // Show all vendors (API already filters to user's vendors)
-        setVendors(data.vendors);
-      }
+      if (response.ok) setVendors(data.vendors);
     } catch (error) {
       console.error("Failed to fetch vendors");
     }
@@ -161,18 +164,13 @@ function InventoryContent() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     try {
       const response = await fetch("/api/products", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
-
       const data = await response.json();
-
       if (response.ok) {
         toast.success("Product added successfully!");
         setIsAddDialogOpen(false);
@@ -189,49 +187,38 @@ function InventoryContent() {
           listingUrl: "",
           currency: "USD",
         });
-        // Refresh products list
         await fetchProducts();
       } else {
         toast.error(data.error || "Failed to add product");
       }
     } catch (error) {
-      console.error("Add product error:", error);
       toast.error("An error occurred while adding product");
     }
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
-    if (name === 'country') {
-      // Auto-detect currency based on country
-      const detectedCurrency = countryCurrencyMap[value] || countryCurrencyMap[value.trim()] || 'USD';
+    if (name === "country") {
+      const detectedCurrency =
+        countryCurrencyMap[value] || countryCurrencyMap[value.trim()] || "USD";
       setCurrency(detectedCurrency);
-      setFormData({
-        ...formData,
-        [name]: value,
-        currency: detectedCurrency,
-      });
+      setFormData({ ...formData, [name]: value, currency: detectedCurrency });
     } else {
-      setFormData({
-        ...formData,
-        [name]: value,
-      });
+      setFormData({ ...formData, [name]: value });
     }
   };
 
   const handleDownloadCSV = async () => {
     try {
       let url;
-      
       if (selectedProducts.length > 0) {
-        // Export only selected products
-        const selectedData = products.filter(p => selectedProducts.includes(p._id));
+        const selectedData = products.filter((p) =>
+          selectedProducts.includes(p._id)
+        );
         const csv = generateCSVFromProducts(selectedData);
-        const blob = new Blob([csv], { type: 'text/csv' });
+        const blob = new Blob([csv], { type: "text/csv" });
         url = window.URL.createObjectURL(blob);
       } else {
-        // Export all products
         const response = await fetch("/api/products/export");
         if (!response.ok) {
           toast.error("Failed to download CSV");
@@ -240,15 +227,15 @@ function InventoryContent() {
         const blob = await response.blob();
         url = window.URL.createObjectURL(blob);
       }
-      
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = `inventory-export-${new Date().toISOString().split('T')[0]}.csv`;
+      a.download = `inventory-export-${
+        new Date().toISOString().split("T")[0]
+      }.csv`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      
       const count = selectedProducts.length || products.length;
       toast.success(`${count} product(s) downloaded successfully!`);
     } catch (error) {
@@ -257,30 +244,29 @@ function InventoryContent() {
   };
 
   const generateCSVFromProducts = (productsToExport) => {
-    let csv = 'Country,SKU,Name,Description,Type,Vendor,Stock,Unit Cost,Listing URL\n';
-    
-    productsToExport.forEach(product => {
+    let csv =
+      "Country,SKU,Name,Description,Type,Vendor,Stock,Unit Cost,Listing URL\n";
+    productsToExport.forEach((product) => {
       const row = [
-        product.country || '',
-        product.sku || '',
-        product.name || '',
-        `"${(product.description || '').replace(/"/g, '""')}"`,
-        product.type || '',
-        product.vendorId?.name || '',
+        product.country || "",
+        product.sku || "",
+        product.name || "",
+        `"${(product.description || "").replace(/"/g, '""')}"`,
+        product.type || "",
+        product.vendorId?.name || "",
         product.stock || 0,
         product.unitCost || 0,
-        product.listingUrl || ''
-      ].join(',');
-      csv += row + '\n';
+        product.listingUrl || "",
+      ].join(",");
+      csv += row + "\n";
     });
-    
     return csv;
   };
 
   const toggleProductSelection = (productId) => {
-    setSelectedProducts(prev => 
+    setSelectedProducts((prev) =>
       prev.includes(productId)
-        ? prev.filter(id => id !== productId)
+        ? prev.filter((id) => id !== productId)
         : [...prev, productId]
     );
   };
@@ -289,24 +275,25 @@ function InventoryContent() {
     if (selectedProducts.length === filteredProducts.length) {
       setSelectedProducts([]);
     } else {
-      setSelectedProducts(filteredProducts.map(p => p._id));
+      setSelectedProducts(filteredProducts.map((p) => p._id));
     }
   };
 
   const handleEdit = (product) => {
     setEditingProduct(product);
-    const detectedCurrency = product.currency || countryCurrencyMap[product.country] || 'USD';
+    const detectedCurrency =
+      product.currency || countryCurrencyMap[product.country] || "USD";
     setCurrency(detectedCurrency);
     setFormData({
-      country: product.country || '',
-      sku: product.sku || '',
-      name: product.name || '',
-      description: product.description || '',
-      type: product.type || '',
-      vendorId: product.vendorId?._id || '',
+      country: product.country || "",
+      sku: product.sku || "",
+      name: product.name || "",
+      description: product.description || "",
+      type: product.type || "",
+      vendorId: product.vendorId?._id || "",
       stock: product.stock || 0,
       unitCost: product.unitCost || 0,
-      listingUrl: product.listingUrl || '',
+      listingUrl: product.listingUrl || "",
       currency: detectedCurrency,
     });
     setIsEditDialogOpen(true);
@@ -314,18 +301,13 @@ function InventoryContent() {
 
   const handleUpdate = async (e) => {
     e.preventDefault();
-
     try {
       const response = await fetch(`/api/products/${editingProduct._id}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
-
       const data = await response.json();
-
       if (response.ok) {
         toast.success("Product updated successfully!");
         setIsEditDialogOpen(false);
@@ -359,14 +341,11 @@ function InventoryContent() {
 
   const handleDeleteConfirm = async () => {
     if (!productToDelete) return;
-
     try {
       const response = await fetch(`/api/products/${productToDelete._id}`, {
         method: "DELETE",
       });
-
       const data = await response.json();
-
       if (response.ok) {
         toast.success("Product deleted successfully!");
         setDeleteConfirmOpen(false);
@@ -386,9 +365,9 @@ function InventoryContent() {
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
+        const a = document.createElement("a");
         a.href = url;
-        a.download = 'inventory-template.csv';
+        a.download = "inventory-template.csv";
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -404,75 +383,54 @@ function InventoryContent() {
 
   const handleUploadCSV = async (e) => {
     const file = e.target.files?.[0];
-    if (!file) {
-      console.log('No file selected');
-      return;
-    }
-
-    console.log('File selected:', file.name, file.type, file.size);
-
-    if (!file.name.endsWith('.csv')) {
+    if (!file) return;
+    if (!file.name.endsWith(".csv")) {
       toast.error("Please upload a CSV file");
       return;
     }
-
     const loadingToast = toast.loading("Uploading CSV file...");
-
     try {
       setUploadingCSV(true);
       const formData = new FormData();
-      formData.append('file', file);
-
-      console.log('Sending request to /api/products/upload');
-
+      formData.append("file", file);
       const response = await fetch("/api/products/upload", {
         method: "POST",
         body: formData,
       });
-
-      console.log('Response status:', response.status);
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Error response:', errorText);
         toast.dismiss(loadingToast);
         toast.error(`Upload failed: ${response.status} - ${errorText}`);
         return;
       }
-
       const data = await response.json();
-      console.log('Upload response:', data);
-
       toast.dismiss(loadingToast);
-
       if (response.ok) {
-        toast.success(data.message || 'CSV uploaded successfully!');
-        
-        if (data.results && data.results.errors && data.results.errors.length > 0) {
-          console.warn("Upload errors:", data.results.errors);
-          // Show first few errors as toast
-          const errorPreview = data.results.errors.slice(0, 3).join('; ');
-          toast.warning(`Some rows had errors: ${errorPreview}${data.results.errors.length > 3 ? '...' : ''}`, {
-            duration: 8000
-          });
+        toast.success(data.message || "CSV uploaded successfully!");
+        if (
+          data.results &&
+          data.results.errors &&
+          data.results.errors.length > 0
+        ) {
+          const errorPreview = data.results.errors.slice(0, 3).join("; ");
+          toast.warning(
+            `Some rows had errors: ${errorPreview}${
+              data.results.errors.length > 3 ? "..." : ""
+            }`,
+            { duration: 8000 }
+          );
         }
-        
-        // Refresh products and vendors after successful upload
-        console.log('Refreshing products and vendors...');
         await fetchProducts();
         await fetchVendors();
-        console.log('Products refreshed');
       } else {
         toast.error(data.error || "Failed to upload CSV");
-        console.error("Upload error:", data);
       }
     } catch (error) {
-      console.error("Upload exception:", error);
       toast.dismiss(loadingToast);
       toast.error("An error occurred while uploading CSV: " + error.message);
     } finally {
       setUploadingCSV(false);
-      e.target.value = ''; // Reset file input
+      e.target.value = "";
     }
   };
 
@@ -484,9 +442,9 @@ function InventoryContent() {
   };
 
   const getStockStatus = (stock) => {
-    if (stock === 0) return <Badge variant="destructive">Out of Stock</Badge>;
-    if (stock < 10) return <Badge variant="warning">Low Stock</Badge>;
-    return <Badge variant="success">In Stock</Badge>;
+    if (stock === 0) return <Badge variant="destructive">Out</Badge>;
+    if (stock < 10) return <Badge variant="warning">Low</Badge>;
+    return <Badge variant="success">In</Badge>;
   };
 
   const filteredProducts = products.filter((product) => {
@@ -494,10 +452,9 @@ function InventoryContent() {
     const matchesSearch =
       product.sku.toLowerCase().includes(searchLower) ||
       product.name.toLowerCase().includes(searchLower);
-    
     const matchesType = selectedType === "all" || product.type === selectedType;
-    const matchesVendor = selectedVendor === "all" || product.vendorId._id === selectedVendor;
-
+    const matchesVendor =
+      selectedVendor === "all" || product.vendorId?._id === selectedVendor;
     return matchesSearch && matchesType && matchesVendor;
   });
 
@@ -511,15 +468,17 @@ function InventoryContent() {
       }}
     >
       <AppSidebar variant="inset" />
-      <SidebarInset className="flex flex-col">
+      <SidebarInset className="flex flex-col w-full">
         <SiteHeader />
-        <div className="flex-1 overflow-auto p-4 lg:p-6">
+        <div className="flex-1 overflow-auto p-4 lg:p-6 w-full">
           <div className="space-y-4 pb-6">
-            {/* Page Header */}
-            <div className="flex items-center justify-between">
+            {/* --- RESPONSIVE HEADER --- */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-bold tracking-tight">Inventory</h1>
-                <p className="text-muted-foreground">
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+                  Inventory
+                </h1>
+                <p className="text-sm text-muted-foreground">
                   Manage your product inventory and stock levels
                   {selectedProducts.length > 0 && (
                     <span className="ml-2 text-primary font-semibold">
@@ -528,18 +487,19 @@ function InventoryContent() {
                   )}
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                 {selectedProducts.length > 0 && (
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => setSelectedProducts([])}
                   >
-                    Clear Selection
+                    Clear
                   </Button>
                 )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline">
+                    <Button variant="outline" size="sm">
                       <MoreVertical className="mr-2 h-4 w-4" />
                       Actions
                     </Button>
@@ -547,22 +507,23 @@ function InventoryContent() {
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem onClick={handleDownloadCSV}>
                       <Download className="mr-2 h-4 w-4" />
-                      {selectedProducts.length > 0 
-                        ? `Download Selected (${selectedProducts.length})` 
-                        : 'Download All CSV'}
+                      {selectedProducts.length > 0
+                        ? `Download Selected (${selectedProducts.length})`
+                        : "Download All CSV"}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleDownloadTemplate}>
                       <FileDown className="mr-2 h-4 w-4" />
                       Export Template
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                    <DropdownMenuItem
+                      onClick={() => fileInputRef.current?.click()}
+                    >
                       <Upload className="mr-2 h-4 w-4" />
-                      {uploadingCSV ? 'Uploading...' : 'Upload CSV'}
+                      {uploadingCSV ? "Uploading..." : "Upload CSV"}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                
-                {/* Hidden file input */}
+
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -571,14 +532,18 @@ function InventoryContent() {
                   className="hidden"
                   disabled={uploadingCSV}
                 />
-                
-                <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+
+                <Dialog
+                  open={isAddDialogOpen}
+                  onOpenChange={setIsAddDialogOpen}
+                >
                   <DialogTrigger asChild>
-                    <Button>
+                    <Button size="sm">
                       <Plus className="mr-2 h-4 w-4" />
                       Add Product
                     </Button>
                   </DialogTrigger>
+                  {/* ... Add Dialog Content (Same as original) ... */}
                   <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                     <form onSubmit={handleSubmit}>
                       <DialogHeader>
@@ -587,6 +552,7 @@ function InventoryContent() {
                           Add a new product to your inventory
                         </DialogDescription>
                       </DialogHeader>
+                      {/* ... Form fields (Same as original) ... */}
                       <div className="grid gap-4 py-4">
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
@@ -594,20 +560,27 @@ function InventoryContent() {
                             <Select
                               value={formData.country}
                               onValueChange={(value) => {
-                                const detectedCurrency = countryCurrencyMap[value] || 'USD';
+                                const detectedCurrency =
+                                  countryCurrencyMap[value] || "USD";
                                 setCurrency(detectedCurrency);
-                                setFormData({ ...formData, country: value, currency: detectedCurrency });
+                                setFormData({
+                                  ...formData,
+                                  country: value,
+                                  currency: detectedCurrency,
+                                });
                               }}
                             >
                               <SelectTrigger>
                                 <SelectValue placeholder="Select country" />
                               </SelectTrigger>
                               <SelectContent className="max-h-[300px]">
-                                {Object.keys(countryCurrencyMap).sort().map((country) => (
-                                  <SelectItem key={country} value={country}>
-                                    {country} ({countryCurrencyMap[country]})
-                                  </SelectItem>
-                                ))}
+                                {Object.keys(countryCurrencyMap)
+                                  .sort()
+                                  .map((country) => (
+                                    <SelectItem key={country} value={country}>
+                                      {country} ({countryCurrencyMap[country]})
+                                    </SelectItem>
+                                  ))}
                               </SelectContent>
                             </Select>
                           </div>
@@ -619,7 +592,7 @@ function InventoryContent() {
                               value={formData.sku}
                               onChange={handleChange}
                               required
-                              placeholder="e.g., PROD-001"
+                              placeholder="PROD-001"
                             />
                           </div>
                         </div>
@@ -653,7 +626,7 @@ function InventoryContent() {
                               name="type"
                               value={formData.type}
                               onChange={handleChange}
-                              placeholder="e.g., Electronics, Clothing"
+                              placeholder="Electronics"
                             />
                           </div>
                           <div className="space-y-2">
@@ -669,7 +642,10 @@ function InventoryContent() {
                               </SelectTrigger>
                               <SelectContent>
                                 {vendors.map((vendor) => (
-                                  <SelectItem key={vendor._id} value={vendor._id}>
+                                  <SelectItem
+                                    key={vendor._id}
+                                    value={vendor._id}
+                                  >
                                     {vendor.name} ({vendor.vendorType})
                                   </SelectItem>
                                 ))}
@@ -690,7 +666,9 @@ function InventoryContent() {
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="unitCost">Unit Cost ({currency})</Label>
+                            <Label htmlFor="unitCost">
+                              Unit Cost ({currency})
+                            </Label>
                             <Input
                               id="unitCost"
                               name="unitCost"
@@ -721,8 +699,11 @@ function InventoryContent() {
                   </DialogContent>
                 </Dialog>
 
-                {/* Edit Product Dialog */}
-                <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                {/* Edit Product Dialog - Preserved */}
+                <Dialog
+                  open={isEditDialogOpen}
+                  onOpenChange={setIsEditDialogOpen}
+                >
                   <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                     <form onSubmit={handleUpdate}>
                       <DialogHeader>
@@ -738,20 +719,27 @@ function InventoryContent() {
                             <Select
                               value={formData.country}
                               onValueChange={(value) => {
-                                const detectedCurrency = countryCurrencyMap[value] || 'USD';
+                                const detectedCurrency =
+                                  countryCurrencyMap[value] || "USD";
                                 setCurrency(detectedCurrency);
-                                setFormData({ ...formData, country: value, currency: detectedCurrency });
+                                setFormData({
+                                  ...formData,
+                                  country: value,
+                                  currency: detectedCurrency,
+                                });
                               }}
                             >
                               <SelectTrigger>
                                 <SelectValue placeholder="Select country" />
                               </SelectTrigger>
                               <SelectContent className="max-h-[300px]">
-                                {Object.keys(countryCurrencyMap).sort().map((country) => (
-                                  <SelectItem key={country} value={country}>
-                                    {country} ({countryCurrencyMap[country]})
-                                  </SelectItem>
-                                ))}
+                                {Object.keys(countryCurrencyMap)
+                                  .sort()
+                                  .map((country) => (
+                                    <SelectItem key={country} value={country}>
+                                      {country} ({countryCurrencyMap[country]})
+                                    </SelectItem>
+                                  ))}
                               </SelectContent>
                             </Select>
                           </div>
@@ -763,7 +751,7 @@ function InventoryContent() {
                               value={formData.sku}
                               onChange={handleChange}
                               required
-                              placeholder="e.g., PROD-001"
+                              placeholder="PROD-001"
                             />
                           </div>
                         </div>
@@ -775,7 +763,7 @@ function InventoryContent() {
                             value={formData.name}
                             onChange={handleChange}
                             required
-                            placeholder="Enter product name"
+                            placeholder="Product name"
                           />
                         </div>
                         <div className="space-y-2">
@@ -786,7 +774,7 @@ function InventoryContent() {
                             value={formData.description}
                             onChange={handleChange}
                             rows={3}
-                            placeholder="Enter product description"
+                            placeholder="Description"
                           />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -797,7 +785,7 @@ function InventoryContent() {
                               name="type"
                               value={formData.type}
                               onChange={handleChange}
-                              placeholder="e.g., Electronics, Clothing"
+                              placeholder="Type"
                             />
                           </div>
                           <div className="space-y-2">
@@ -813,7 +801,10 @@ function InventoryContent() {
                               </SelectTrigger>
                               <SelectContent>
                                 {vendors.map((vendor) => (
-                                  <SelectItem key={vendor._id} value={vendor._id}>
+                                  <SelectItem
+                                    key={vendor._id}
+                                    value={vendor._id}
+                                  >
                                     {vendor.name} ({vendor.vendorType})
                                   </SelectItem>
                                 ))}
@@ -823,18 +814,17 @@ function InventoryContent() {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label htmlFor="edit-stock">Stock Quantity</Label>
+                            <Label htmlFor="edit-stock">Stock</Label>
                             <Input
                               id="edit-stock"
                               name="stock"
                               type="number"
                               value={formData.stock}
                               onChange={handleChange}
-                              placeholder="0"
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="edit-unitCost">Unit Cost ({currency})</Label>
+                            <Label htmlFor="edit-unitCost">Unit Cost</Label>
                             <Input
                               id="edit-unitCost"
                               name="unitCost"
@@ -842,46 +832,58 @@ function InventoryContent() {
                               step="0.01"
                               value={formData.unitCost}
                               onChange={handleChange}
-                              placeholder="0.00"
                             />
                           </div>
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="edit-listingUrl">Listing Data Link</Label>
+                          <Label htmlFor="edit-listingUrl">Listing Link</Label>
                           <Input
                             id="edit-listingUrl"
                             name="listingUrl"
                             type="url"
                             value={formData.listingUrl}
                             onChange={handleChange}
-                            placeholder="https://example.com/product"
                           />
                         </div>
                       </div>
                       <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setIsEditDialogOpen(false)}
+                        >
                           Cancel
                         </Button>
-                        <Button type="submit">Update Product</Button>
+                        <Button type="submit">Update</Button>
                       </DialogFooter>
                     </form>
                   </DialogContent>
                 </Dialog>
 
-                {/* Delete Confirmation Dialog */}
-                <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+                {/* Delete Dialog - Preserved */}
+                <Dialog
+                  open={deleteConfirmOpen}
+                  onOpenChange={setDeleteConfirmOpen}
+                >
                   <DialogContent>
                     <DialogHeader>
                       <DialogTitle>Delete Product</DialogTitle>
                       <DialogDescription>
-                        Are you sure you want to delete "{productToDelete?.name}"? This action cannot be undone.
+                        Are you sure you want to delete "{productToDelete?.name}
+                        "? This cannot be undone.
                       </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
-                      <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
+                      <Button
+                        variant="outline"
+                        onClick={() => setDeleteConfirmOpen(false)}
+                      >
                         Cancel
                       </Button>
-                      <Button variant="destructive" onClick={handleDeleteConfirm}>
+                      <Button
+                        variant="destructive"
+                        onClick={handleDeleteConfirm}
+                      >
                         Delete
                       </Button>
                     </DialogFooter>
@@ -898,7 +900,7 @@ function InventoryContent() {
                   <div className="relative">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Search by SKU or name..."
+                      placeholder="Search SKU/name..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="pl-8"
@@ -923,7 +925,10 @@ function InventoryContent() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Vendor</label>
-                  <Select value={selectedVendor} onValueChange={setSelectedVendor}>
+                  <Select
+                    value={selectedVendor}
+                    onValueChange={setSelectedVendor}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -940,172 +945,236 @@ function InventoryContent() {
               </div>
             </Card>
 
-            {/* Inventory Table */}
-            <Card className="border-2 shadow-lg">
-              <div className="overflow-x-auto max-h-[calc(100vh-450px)] overflow-y-auto">
-                <Table>
+            {/* --- RESPONSIVE TABLE --- */}
+            <Card className="border-2 shadow-lg w-full">
+              <div className="overflow-x-auto w-full">
+                <Table className="min-w-full">
                   <TableHeader>
                     <TableRow className="bg-gradient-to-r from-primary/10 to-primary/5 border-b-2">
-                      <TableHead className="w-12 border-r">
+                      <TableHead className="w-8 border-r p-2">
                         <input
                           type="checkbox"
-                          checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
+                          checked={
+                            selectedProducts.length ===
+                              filteredProducts.length &&
+                            filteredProducts.length > 0
+                          }
                           onChange={toggleSelectAll}
                           className="h-4 w-4 cursor-pointer"
                         />
                       </TableHead>
-                      <TableHead className="font-bold border-r">COUNTRY</TableHead>
-                      <TableHead className="font-bold border-r">SKU</TableHead>
-                      <TableHead className="font-bold border-r">NAME</TableHead>
-                      <TableHead className="font-bold border-r">DESCRIPTION</TableHead>
-                      <TableHead className="font-bold border-r">TYPE</TableHead>
-                      <TableHead className="font-bold border-r">VENDOR</TableHead>
-                      <TableHead className="text-right font-bold border-r">STOCK</TableHead>
-                      <TableHead className="text-right font-bold border-r">UNIT COST</TableHead>
-                      <TableHead className="text-right font-bold border-r">TOTAL VALUE</TableHead>
-                      <TableHead className="font-bold border-r">LISTING URL</TableHead>
-                      <TableHead className="font-bold">ACTIONS</TableHead>
+                      {/* Compact Headers */}
+                      <TableHead className="font-bold border-r text-xs md:text-sm p-2">
+                        CNTRY
+                      </TableHead>
+                      <TableHead className="font-bold border-r text-xs md:text-sm p-2">
+                        SKU
+                      </TableHead>
+                      <TableHead className="font-bold border-r text-xs md:text-sm p-2 min-w-[120px]">
+                        PRODUCT INFO
+                      </TableHead>
+                      <TableHead className="font-bold border-r text-xs md:text-sm p-2 hidden sm:table-cell">
+                        DESC
+                      </TableHead>
+                      <TableHead className="font-bold border-r text-xs md:text-sm p-2 hidden md:table-cell">
+                        TYPE
+                      </TableHead>
+                      <TableHead className="font-bold border-r text-xs md:text-sm p-2">
+                        VENDOR
+                      </TableHead>
+                      <TableHead className="text-right font-bold border-r text-xs md:text-sm p-2">
+                        STOCK
+                      </TableHead>
+                      <TableHead className="text-right font-bold border-r text-xs md:text-sm p-2">
+                        COST
+                      </TableHead>
+                      <TableHead className="text-right font-bold border-r text-xs md:text-sm p-2 hidden lg:table-cell">
+                        VALUE
+                      </TableHead>
+                      <TableHead className="font-bold border-r text-xs md:text-sm p-2 hidden xl:table-cell">
+                        LINK
+                      </TableHead>
+                      <TableHead className="font-bold text-xs md:text-sm p-2">
+                        ACT
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={12} className="text-center py-8">
+                        <TableCell colSpan={11} className="text-center py-8">
                           <div className="flex flex-col items-center gap-2">
                             <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-                            <span className="text-muted-foreground">Loading inventory...</span>
+                            <span className="text-muted-foreground">
+                              Loading...
+                            </span>
                           </div>
                         </TableCell>
                       </TableRow>
                     ) : filteredProducts.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={12} className="text-center py-12">
+                        <TableCell colSpan={11} className="text-center py-12">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
                             <Package2 className="h-12 w-12 opacity-50" />
-                            <p className="text-lg font-medium">No products found</p>
-                            <p className="text-sm">Add your first product to get started</p>
+                            <p className="text-lg font-medium">
+                              No products found
+                            </p>
                           </div>
                         </TableCell>
                       </TableRow>
                     ) : (
                       filteredProducts.map((product, index) => (
-                        <TableRow 
+                        <TableRow
                           key={product._id}
                           className={`hover:bg-muted/50 transition-colors ${
-                            product.vendorId?.vendorType === 'public' 
-                              ? product.isApproved 
-                                ? 'bg-green-50 dark:bg-green-950/20 hover:bg-green-100 dark:hover:bg-green-900/30' 
-                                : 'bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-900/30'
-                              : index % 2 === 0 ? 'bg-background' : 'bg-muted/20'
+                            product.vendorId?.vendorType === "public"
+                              ? product.isApproved
+                                ? "bg-green-50 dark:bg-green-950/20"
+                                : "bg-red-50 dark:bg-red-950/20"
+                              : index % 2 === 0
+                              ? "bg-background"
+                              : "bg-muted/20"
                           }`}
                         >
-                          <TableCell className="border-r">
+                          <TableCell className="border-r p-2 align-top">
                             <input
                               type="checkbox"
                               checked={selectedProducts.includes(product._id)}
-                              onChange={() => toggleProductSelection(product._id)}
+                              onChange={() =>
+                                toggleProductSelection(product._id)
+                              }
                               className="h-4 w-4 cursor-pointer"
                             />
                           </TableCell>
-                          <TableCell className="font-medium border-r">
+
+                          {/* Country - Compact */}
+                          <TableCell className="font-medium border-r p-2 align-top">
                             {product.country ? (
-                              <Badge variant="outline" className="font-medium">
-                                {product.country}
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1"
+                              >
+                                {product.country.slice(0, 3).toUpperCase()}
                               </Badge>
                             ) : (
-                              <span className="text-muted-foreground">-</span>
+                              "-"
                             )}
                           </TableCell>
-                          <TableCell className="font-mono font-semibold text-primary border-r">
+
+                          {/* SKU - Break All */}
+                          <TableCell className="font-mono text-xs font-semibold text-primary border-r p-2 align-top break-all">
                             {product.sku}
                           </TableCell>
-                          <TableCell className="font-medium border-r">{product.name}</TableCell>
-                          <TableCell className="border-r max-w-xs truncate" title={product.description}>
-                            {product.description ? (
-                              <span className="text-sm text-muted-foreground">{product.description}</span>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
+
+                          {/* Name - Wrap & Clamp */}
+                          <TableCell className="font-medium border-r p-2 align-top text-xs md:text-sm">
+                            <div className="line-clamp-3 md:line-clamp-2 min-w-[100px]">
+                              {product.name}
+                            </div>
                           </TableCell>
-                          <TableCell className="border-r">
+
+                          {/* Desc - Hidden on mobile */}
+                          <TableCell className="border-r p-2 align-top hidden sm:table-cell">
+                            <div className="line-clamp-2 text-xs text-muted-foreground max-w-[150px]">
+                              {product.description || "-"}
+                            </div>
+                          </TableCell>
+
+                          {/* Type - Hidden on mobile */}
+                          <TableCell className="border-r p-2 align-top hidden md:table-cell">
                             {product.type ? (
-                              <Badge variant="secondary" className="font-medium">
+                              <Badge
+                                variant="secondary"
+                                className="text-[10px]"
+                              >
                                 {product.type}
                               </Badge>
                             ) : (
-                              <span className="text-muted-foreground">-</span>
+                              "-"
                             )}
                           </TableCell>
-                          <TableCell className="border-r">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{product.vendorId?.name || '-'}</span>
-                              {product.vendorId?.vendorType && (
-                                <Badge variant="outline" className="text-xs capitalize">
-                                  {product.vendorId.vendorType}
-                                </Badge>
-                              )}
-                              {/* Show approval status for public vendor products */}
-                              {product.vendorId?.vendorType === 'public' && (
-                                product.isApproved ? (
-                                  <Badge variant="success" className="text-xs">
-                                    ✓ Approved
-                                  </Badge>
+
+                          {/* Vendor - Stacked Info */}
+                          <TableCell className="border-r p-2 align-top text-xs">
+                            <div className="flex flex-col gap-1">
+                              <span className="font-semibold truncate max-w-[80px]">
+                                {product.vendorId?.name || "-"}
+                              </span>
+                              {product.vendorId?.vendorType === "public" &&
+                                (product.isApproved ? (
+                                  <span className="text-green-600 text-[10px]">
+                                    ✓ Appr.
+                                  </span>
                                 ) : (
-                                  <Badge variant="warning" className="text-xs">
-                                    ⏳ Pending Approval
-                                  </Badge>
-                                )
-                              )}
+                                  <span className="text-red-500 text-[10px]">
+                                    ⏳ Pend.
+                                  </span>
+                                ))}
                             </div>
                           </TableCell>
-                          <TableCell className="text-right border-r">
-                            <div className="flex items-center justify-end gap-2">
-                              {getStockStatus(product.stock)}
-                              <span className="font-bold text-lg">{product.stock}</span>
+
+                          {/* Stock - Stacked Status & Count */}
+                          <TableCell className="text-right border-r p-2 align-top">
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="font-bold text-sm">
+                                {product.stock}
+                              </span>
+                              <span className="scale-75 origin-right">
+                                {getStockStatus(product.stock)}
+                              </span>
                             </div>
                           </TableCell>
-                          <TableCell className="text-right font-semibold border-r text-blue-600 dark:text-blue-400">
-                            {formatCurrency(product.unitCost, product.currency || 'USD')}
+
+                          {/* Cost - Stacked */}
+                          <TableCell className="text-right font-semibold border-r p-2 align-top text-xs">
+                            <div className="flex flex-col">
+                              <span>{product.unitCost.toFixed(2)}</span>
+                              <span className="text-muted-foreground text-[10px]">
+                                {product.currency || "USD"}
+                              </span>
+                            </div>
                           </TableCell>
-                          <TableCell className="text-right font-bold text-lg border-r text-green-600 dark:text-green-400">
-                            {formatCurrency(product.stock * product.unitCost, product.currency || 'USD')}
-                          </TableCell>
-                          <TableCell className="border-r">
-                            {product.listingUrl ? (
-                              <a 
-                                href={product.listingUrl} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:underline text-sm flex items-center gap-1"
-                              >
-                                View Link
-                                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                </svg>
-                              </a>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
+
+                          {/* Total Value - Hidden on small screens */}
+                          <TableCell className="text-right border-r p-2 align-top hidden lg:table-cell text-xs font-bold text-green-600">
+                            {formatCurrency(
+                              product.stock * product.unitCost,
+                              product.currency || "USD"
                             )}
                           </TableCell>
-                          <TableCell>
-                            <div className="flex gap-1">
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8 hover:bg-blue-50 dark:hover:bg-blue-950" 
-                                title="Edit product"
+
+                          {/* Link - Hidden on small screens */}
+                          <TableCell className="border-r p-2 align-top hidden xl:table-cell">
+                            {product.listingUrl && (
+                              <a
+                                href={product.listingUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline text-xs"
+                              >
+                                Link
+                              </a>
+                            )}
+                          </TableCell>
+
+                          {/* Actions - Flex row */}
+                          <TableCell className="p-2 align-top">
+                            <div className="flex flex-col sm:flex-row gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
                                 onClick={() => handleEdit(product)}
                               >
-                                <Edit className="h-4 w-4 text-blue-600" />
+                                <Edit className="h-3 w-3 text-blue-600" />
                               </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8 hover:bg-red-50 dark:hover:bg-red-950" 
-                                title="Delete product"
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
                                 onClick={() => handleDeleteClick(product)}
                               >
-                                <Trash2 className="h-4 w-4 text-red-600" />
+                                <Trash2 className="h-3 w-3 text-red-600" />
                               </Button>
                             </div>
                           </TableCell>
@@ -1117,27 +1186,35 @@ function InventoryContent() {
               </div>
             </Card>
 
-            {/* Summary Card */}
-            {filteredProducts.length > 0 && (
-              <Card className="p-6 border-2 shadow-lg bg-gradient-to-br from-background to-muted/20">
+            {/* Summary Card - Responsive Grid */}
+            {products.length > 0 && (
+              <Card className="p-4 sm:p-6 border-2 shadow-lg bg-gradient-to-br from-background to-muted/20">
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                   <span className="h-1 w-8 bg-primary rounded"></span>
                   Inventory Summary
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Products</p>
-                    <p className="text-3xl font-bold text-primary">{filteredProducts.length}</p>
+                    <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Total Products
+                    </p>
+                    <p className="text-2xl sm:text-3xl font-bold text-primary">
+                      {filteredProducts.length}
+                    </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Stock</p>
-                    <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                    <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Total Stock
+                    </p>
+                    <p className="text-2xl sm:text-3xl font-bold text-blue-600 dark:text-blue-400">
                       {filteredProducts.reduce((sum, p) => sum + p.stock, 0)}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Inventory Value</p>
-                    <p className="text-3xl font-bold text-green-600 dark:text-green-400">
+                    <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Total Value
+                    </p>
+                    <p className="text-xl sm:text-3xl font-bold text-green-600 dark:text-green-400 truncate">
                       {formatCurrency(
                         filteredProducts.reduce(
                           (sum, p) => sum + p.stock * p.unitCost,
@@ -1147,11 +1224,11 @@ function InventoryContent() {
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                    <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
                       <AlertCircle className="h-3 w-3" />
                       Out of Stock
                     </p>
-                    <p className="text-3xl font-bold text-red-600 dark:text-red-400">
+                    <p className="text-2xl sm:text-3xl font-bold text-red-600 dark:text-red-400">
                       {filteredProducts.filter((p) => p.stock === 0).length}
                     </p>
                   </div>
@@ -1167,11 +1244,13 @@ function InventoryContent() {
 
 export default function InventoryPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        </div>
+      }
+    >
       <InventoryContent />
     </Suspense>
   );
