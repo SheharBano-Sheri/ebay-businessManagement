@@ -69,6 +69,7 @@ export async function GET(request) {
       query.publicVendorUserId = { $ne: userId };
       if (!isMasterAdmin) {
         query.approvalStatus = 'approved';
+        query.isHidden = { $ne: true }; // Hide hidden vendors from regular users
       }
     } else if (type === 'private') {
       query.vendorType = 'private';
@@ -88,7 +89,7 @@ export async function GET(request) {
       } else {
         query = {
           $or: [
-            { vendorType: 'public', isActive: true, approvalStatus: 'approved' },
+            { vendorType: 'public', isActive: true, approvalStatus: 'approved', isHidden: { $ne: true } },
             { vendorType: 'private', adminId: adminId },
             { vendorType: 'virtual', adminId: adminId }
           ]

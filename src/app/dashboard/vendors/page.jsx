@@ -19,9 +19,11 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Search, Plus, Building2, CheckCircle, Mail, UserPlus, Eye, Settings } from "lucide-react";
+import { Search, Plus, Building2, CheckCircle, Mail, UserPlus, Eye, Settings, Trash2, EyeOff } from "lucide-react";
+import { useSession } from "next-auth/react";
 
 export default function VendorsPage() {
+  const { data: session } = useSession();
   const [publicVendors, setPublicVendors] = useState([]);
   const [myVendors, setMyVendors] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -132,6 +134,57 @@ export default function VendorsPage() {
     window.location.href = `/dashboard/vendors/${vendor._id}/inventory`;
   };
 
+  const handleRemoveVendor = async (vendorId, vendorName) => {
+    if (!window.confirm(`Are you sure you want to remove "${vendorName}" from your vendors?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/vendors/${vendorId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message || 'Vendor removed successfully');
+        fetchVendors();
+      } else {
+        toast.error(data.error || 'Failed to remove vendor');
+      }
+    } catch (error) {
+      toast.error('An error occurred while removing vendor');
+    }
+  };
+
+  const handleHideVendor = async (vendorId, vendorName, isCurrentlyHidden) => {
+    const action = isCurrentlyHidden ? 'unhide' : 'hide';
+    const actionText = isCurrentlyHidden ? 'unhide' : 'hide';
+    
+    if (!window.confirm(`Are you sure you want to ${actionText} "${vendorName}"? ${!isCurrentlyHidden ? 'This will prevent all users from seeing this vendor.' : 'This will make the vendor visible to users again.'}`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/vendors/${vendorId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message || `Vendor ${actionText}d successfully`);
+        fetchVendors();
+      } else {
+        toast.error(data.error || `Failed to ${actionText} vendor`);
+      }
+    } catch (error) {
+      toast.error(`An error occurred while ${actionText}ing vendor`);
+    }
+  };
+
   const filteredPublicVendors = publicVendors.filter((vendor) =>
     vendor.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -199,7 +252,15 @@ export default function VendorsPage() {
                         <CardHeader>
                           <div className="flex items-start justify-between">
                             <div>
-                              <CardTitle>{vendor.name}</CardTitle>
+                              <CardTitle className="flex items-center gap-2">
+                                {vendor.name}
+                                {vendor.isHidden && (
+                                  <Badge variant="destructive" className="text-xs">
+                                    <EyeOff className="h-3 w-3 mr-1" />
+                                    Hidden
+                                  </Badge>
+                                )}
+                              </CardTitle>
                               <CardDescription className="mt-1">
                                 {vendor.email || "No email provided"}
                               </CardDescription>
@@ -220,11 +281,11 @@ export default function VendorsPage() {
                             </p>
                           )}
                         </CardContent>
-                        <CardFooter>
+                        <CardFooter className="flex flex-col gap-2">
                           <Button
                             className="w-full"
                             onClick={() => addVendorToAccount(vendor._id)}
-                            disabled={vendor.isAddedByCurrentUser}
+                            disabled={vendor.isAddedByCurrentUser || vendor.isHidden}
                             variant={vendor.isAddedByCurrentUser ? "secondary" : "default"}
                           >
                             {vendor.isAddedByCurrentUser ? (
@@ -239,6 +300,25 @@ export default function VendorsPage() {
                               </>
                             )}
                           </Button>
+                          {session?.user?.role === 'master_admin' && (
+                            <Button
+                              className="w-full"
+                              variant={vendor.isHidden ? "default" : "destructive"}
+                              onClick={() => handleHideVendor(vendor._id, vendor.name, vendor.isHidden)}
+                            >
+                              {vendor.isHidden ? (
+                                <>
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  Unhide Vendor
+                                </>
+                              ) : (
+                                <>
+                                  <EyeOff className="mr-2 h-4 w-4" />
+                                  Hide Vendor
+                                </>
+                              )}
+                            </Button>
+                          )}
                         </CardFooter>
                       </Card>
                     ))
@@ -277,10 +357,12 @@ export default function VendorsPage() {
                               variant={
                                 vendor.vendorType === "virtual"
                                   ? "default"
-                                  : "secondary"
+                                  : vendor.vendorType === "public"
+                                  ? "secondary"
+                                  : "outline"
                               }
                             >
-                              {vendor.vendorType === "virtual" ? "Self" : "Private"}
+                              {vendor.vendorType === "virtual" ? "Self" : vendor.vendorType === "public" ? "Public" : "Private"}
                             </Badge>
                           </div>
                         </CardHeader>
@@ -294,15 +376,25 @@ export default function VendorsPage() {
                             </div>
                           )}
                         </CardContent>
-                        <CardFooter>
+                        <CardFooter className="flex gap-2">
                           <Button 
                             variant="outline" 
-                            className="w-full"
+                            className="flex-1"
                             onClick={() => handleViewProducts(vendor)}
                           >
                             <Eye className="mr-2 h-4 w-4" />
                             View Products
                           </Button>
+                          {vendor.vendorType !== "virtual" && (
+                            <Button 
+                              variant="destructive" 
+                              size="icon"
+                              onClick={() => handleRemoveVendor(vendor._id, vendor.name)}
+                              title="Remove vendor"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </CardFooter>
                       </Card>
                     ))

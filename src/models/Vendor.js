@@ -83,6 +83,17 @@ const VendorSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  isHidden: {
+    type: Boolean,
+    default: false
+  },
+  hiddenBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  hiddenAt: {
+    type: Date
+  },
   autoApproveInventory: {
     type: Boolean,
     default: false

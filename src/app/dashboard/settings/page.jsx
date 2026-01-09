@@ -129,8 +129,8 @@ function SettingsContent() {
       return;
     }
 
-    if (passwordForm.newPassword.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (passwordForm.newPassword.length < 8) {
+      toast.error("Password must be at least 8 characters");
       return;
     }
 
@@ -155,7 +155,17 @@ function SettingsContent() {
           confirmPassword: "",
         });
       } else {
-        toast.error(data.error || "Failed to change password");
+        // Show specific password validation errors if available
+        if (data.details && Array.isArray(data.details) && data.details.length > 0) {
+          toast.error(data.error || "Failed to change password");
+          data.details.forEach((detail, index) => {
+            setTimeout(() => {
+              toast.error(detail, { duration: 5000 });
+            }, (index + 1) * 100);
+          });
+        } else {
+          toast.error(data.error || "Failed to change password");
+        }
       }
     } catch (error) {
       toast.error("Error changing password");
@@ -459,9 +469,15 @@ function SettingsContent() {
                           }
                           required
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Must be at least 6 characters
-                        </p>
+                        <div className="text-xs text-muted-foreground space-y-1 mt-2">
+                          <p className="font-medium">Password must contain:</p>
+                          <ul className="list-disc list-inside space-y-0.5 ml-1">
+                            <li>At least 8 characters</li>
+                            <li>At least one special character (!@#$%^&*...)</li>
+                            <li>At least one number (recommended)</li>
+                            <li>At least one uppercase letter (recommended)</li>
+                          </ul>
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="confirm-password">

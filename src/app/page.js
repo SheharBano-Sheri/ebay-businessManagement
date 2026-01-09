@@ -50,7 +50,7 @@ const PRICING_PLANS = [
     price: "$9/month billed monthly",
     priceYearly: "$8/month billed yearly",
     features: [
-      "Single user account",
+      "Single user only (no team members)",
       "Up to 5 store monitors",
       "Real-time inventory sync",
       "Basic analytics dashboard",
@@ -62,34 +62,52 @@ const PRICING_PLANS = [
     link: "/auth/signup"
   },
   {
-    name: "Pro",
+    name: "Enterprise",
     description: "Built for growing teams ready to scale their business",
     price: "$29/month billed monthly",
     priceYearly: "$24/month billed yearly",
     features: [
-      "Up to 10 team members + 1 admin",
+      "Up to 10 active team members + 1 Admin",
       "Unlimited store monitors",
       "Automated order processing",
+      "Advanced team permissions",
       "Priority email & chat support",
       "Custom integrations"
     ],
-    buttonText: "Subscribe to Pro",
+    buttonText: "Subscribe to Enterprise",
     buttonVariant: "default",
     popular: true,
     link: "/auth/signup"
   },
   {
-    name: "Enterprise",
+    name: "Premium",
     description: "Tailored solutions for large-scale operations",
-    price: "Custom pricing",
+    price: "Contact for Pricing",
     features: [
       "Unlimited team members",
       "Dedicated account manager",
       "Custom API rate limits",
       "Advanced security & compliance",
       "Custom feature development",
+      "24/7 priority support"
     ],
     buttonText: "Contact Sales",
+    buttonVariant: "secondary",
+    link: "/auth/signup"
+  },
+  {
+    name: "Public Vendor",
+    description: "Join the marketplace and supply products to business users",
+    price: "Free to join",
+    features: [
+      "Marketplace vendor account",
+      "No team members (individual vendor)",
+      "Manage your product catalog",
+      "Connect with multiple buyers",
+      "Track purchase orders",
+      "Vendor dashboard & analytics"
+    ],
+    buttonText: "Join as Vendor",
     buttonVariant: "secondary",
     link: "/auth/signup"
   }
@@ -116,7 +134,7 @@ export default function Home() {
             <div className="flex flex-col sm:flex-row gap-4 mt-4">
               <Link href="/auth/signup">
                 <Button size="lg" className="text-base px-8 py-6 h-auto font-semibold">
-                  Get Started Free
+                  Get Started
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
@@ -196,7 +214,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Pricing Section */}
+      {/* Pricing Section - Static View */}
       <section className="py-24">
         <div className="flex flex-col gap-16 px-8 text-center">
           <div className="flex flex-col items-center justify-center gap-8">
@@ -207,6 +225,7 @@ export default function Home() {
               Managing a business is hard enough, so why not make your life easier? Our pricing plans are simple, transparent and scale with you.
             </p>
 
+            {/* Static pricing toggle - for display only */}
             <Tabs value={pricingInterval} onValueChange={setPricingInterval} className="flex flex-col gap-2">
               <TabsList>
                 <TabsTrigger value="monthly">Monthly</TabsTrigger>
@@ -217,7 +236,7 @@ export default function Home() {
               </TabsList>
             </Tabs>
 
-            <div className="mt-8 grid w-full max-w-4xl gap-4 lg:grid-cols-3">
+            <div className="mt-8 grid w-full max-w-6xl gap-4 lg:grid-cols-4">
               {PRICING_PLANS.map((plan, index) => (
                 <Card
                   key={plan.name}
@@ -250,15 +269,6 @@ export default function Home() {
                       </div>
                     ))}
                   </CardContent>
-
-                  <CardFooter>
-                    <Link href={plan.link} className="w-full">
-                    <Button variant={plan.buttonVariant} className="w-full">
-                      {plan.buttonText}
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                    </Link>
-                  </CardFooter>
                 </Card>
               ))}
             </div>

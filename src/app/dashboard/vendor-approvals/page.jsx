@@ -17,8 +17,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { CheckCircle, XCircle, Clock, UserCheck } from "lucide-react";
+import { CheckCircle, XCircle, Clock, UserCheck, Eye, EyeOff } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,7 @@ function VendorApprovalsContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [vendors, setVendors] = useState([]);
+  const [approvedVendors, setApprovedVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
@@ -66,6 +68,14 @@ function VendorApprovalsContent() {
         setVendors(data.vendors || []);
       } else {
         toast.error(data.error || "Failed to fetch pending vendors");
+      }
+
+      // Fetch approved vendors for the management tab
+      const approvedResponse = await fetch("/api/vendors?type=public");
+      const approvedData = await approvedResponse.json();
+      
+      if (approvedResponse.ok) {
+        setApprovedVendors(approvedData.vendors.filter(v => v.approvalStatus === 'approved') || []);
       }
     } catch (error) {
       toast.error("An error occurred while fetching vendors");
@@ -118,6 +128,34 @@ function VendorApprovalsContent() {
     }
   };
 
+  const handleHideVendor = async (vendor) => {
+    const action = vendor.isHidden ? 'unhide' : 'hide';
+    const actionText = vendor.isHidden ? 'unhide' : 'hide';
+    
+    if (!window.confirm(`Are you sure you want to ${actionText} "${vendor.name}"? ${!vendor.isHidden ? 'This will prevent all users from seeing this vendor.' : 'This will make the vendor visible to users again.'}`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/vendors/${vendor._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message || `Vendor ${actionText}d successfully`);
+        fetchPendingVendors();
+      } else {
+        toast.error(data.error || `Failed to ${actionText} vendor`);
+      }
+    } catch (error) {
+      toast.error(`An error occurred while ${actionText}ing vendor`);
+    }
+  };
+
   const formatDate = (date) => {
     return new Date(date).toLocaleDateString("en-US", {
       year: "numeric",
@@ -160,26 +198,34 @@ function VendorApprovalsContent() {
         <div className="flex flex-1 flex-col p-4 lg:p-6">
           <div className="space-y-4">
             {/* Page Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-                  <UserCheck className="h-8 w-8 text-primary" />
-                  Vendor Approvals
-                </h1>
-                <p className="text-muted-foreground">
-                  Review and approve pending public vendor registrations
-                </p>
-              </div>
-              <Badge variant="outline" className="text-lg px-4 py-2">
-                <Clock className="h-4 w-4 mr-2" />
-                {vendors.length} Pending
-              </Badge>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+                <UserCheck className="h-8 w-8 text-primary" />
+                Vendor Management
+              </h1>
+              <p className="text-muted-foreground">
+                Review and manage public vendor registrations
+              </p>
             </div>
 
-            {/* Pending Vendors Table */}
-            <Card className="border-2 shadow-lg">
-              <div className="overflow-x-auto">
-                <Table>
+            {/* Tabs for Pending and Approved Vendors */}
+            <Tabs defaultValue="pending" className="w-full">
+              <TabsList>
+                <TabsTrigger value="pending">
+                  <Clock className="h-4 w-4 mr-2" />
+                  Pending Approvals ({vendors.length})
+                </TabsTrigger>
+                <TabsTrigger value="approved">
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Approved Vendors ({approvedVendors.length})
+                </TabsTrigger>
+              </TabsList>
+
+              {/* Pending Vendors Tab */}
+              <TabsContent value="pending" className="mt-4">
+                <Card className="border-2 shadow-lg">
+                  <div className="overflow-x-auto">
+                    <Table>
                   <TableHeader>
                     <TableRow className="bg-gradient-to-r from-primary/10 to-primary/5 border-b-2">
                       <TableHead className="font-bold border-r">VENDOR NAME</TableHead>
@@ -266,6 +312,105 @@ function VendorApprovalsContent() {
                 </Table>
               </div>
             </Card>
+          </TabsContent>
+
+          {/* Approved Vendors Tab */}
+          <TabsContent value="approved" className="mt-4">
+            <Card className="border-2 shadow-lg">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="font-bold border-r">Name</TableHead>
+                      <TableHead className="font-bold border-r">Email</TableHead>
+                      <TableHead className="font-bold border-r">Type</TableHead>
+                      <TableHead className="font-bold border-r">Status</TableHead>
+                      <TableHead className="font-bold border-r">Followers</TableHead>
+                      <TableHead className="font-bold">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8">
+                          <div className="flex flex-col items-center gap-2">
+                            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+                            <span className="text-muted-foreground">Loading...</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : approvedVendors.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-12">
+                          <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                            <CheckCircle className="h-12 w-12 opacity-50 text-green-500" />
+                            <p className="text-lg font-medium">No approved vendors</p>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      approvedVendors.map((vendor, index) => (
+                        <TableRow
+                          key={vendor._id}
+                          className={`hover:bg-muted/50 transition-colors ${
+                            vendor.isHidden ? "bg-red-50 dark:bg-red-950/20" : 
+                            index % 2 === 0 ? "bg-background" : "bg-muted/20"
+                          }`}
+                        >
+                          <TableCell className="font-semibold border-r">
+                            {vendor.name}
+                            {vendor.isHidden && (
+                              <Badge variant="destructive" className="ml-2">
+                                <EyeOff className="h-3 w-3 mr-1" />
+                                Hidden
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="border-r">
+                            {vendor.email || "-"}
+                          </TableCell>
+                          <TableCell className="border-r">
+                            <Badge variant="secondary" className="capitalize">
+                              {vendor.vendorType}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="border-r">
+                            <Badge variant="default" className="capitalize bg-green-600">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              {vendor.approvalStatus}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="border-r text-muted-foreground">
+                            {vendor.followerCount || 0} users
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              size="sm"
+                              variant={vendor.isHidden ? "default" : "outline"}
+                              onClick={() => handleHideVendor(vendor)}
+                            >
+                              {vendor.isHidden ? (
+                                <>
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  Unhide
+                                </>
+                              ) : (
+                                <>
+                                  <EyeOff className="h-4 w-4 mr-1" />
+                                  Hide
+                                </>
+                              )}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </Card>
+          </TabsContent>
+        </Tabs>
           </div>
         </div>
       </SidebarInset>

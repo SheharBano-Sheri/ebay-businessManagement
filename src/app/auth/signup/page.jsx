@@ -117,7 +117,19 @@ function SignupFormContent() {
           router.push("/auth/signin");
         }
       } else {
-        toast.error(data.error || "Signup failed");
+        // Show specific password validation errors if available
+        if (data.details && Array.isArray(data.details) && data.details.length > 0) {
+          // Show main error
+          toast.error(data.error || "Signup failed");
+          // Show each specific requirement that wasn't met
+          data.details.forEach((detail, index) => {
+            setTimeout(() => {
+              toast.error(detail, { duration: 5000 });
+            }, (index + 1) * 100);
+          });
+        } else {
+          toast.error(data.error || "Signup failed");
+        }
       }
     } catch (error) {
       toast.error("An error occurred during signup");
@@ -192,6 +204,15 @@ function SignupFormContent() {
                   required
                   disabled={loading}
                 />
+                <div className="text-xs text-muted-foreground space-y-1 mt-2">
+                  <p className="font-medium">Password must contain:</p>
+                  <ul className="list-disc list-inside space-y-0.5 ml-1">
+                    <li>At least 8 characters</li>
+                    <li>At least one special character (!@#$%^&*...)</li>
+                    <li>At least one number (recommended)</li>
+                    <li>At least one uppercase letter (recommended)</li>
+                  </ul>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm Password</Label>
@@ -264,30 +285,16 @@ function SignupFormContent() {
                     >
                       <CardHeader className="p-4">
                         <CardTitle className="text-lg">Personal</CardTitle>
-                        <CardDescription>$0/month</CardDescription>
+                        <CardDescription>$9/month</CardDescription>
                       </CardHeader>
                       <CardContent className="p-4 pt-0">
                         <ul className="text-sm space-y-1">
-                          <li>✓ Solo usage</li>
-                          <li>✓ No team members</li>
-                          <li>✓ Basic features</li>
-                        </ul>
-                      </CardContent>
-                    </Card>
-
-                    <Card 
-                      className={`cursor-pointer transition-all ${membershipPlan === "pro" ? "ring-2 ring-primary" : ""}`}
-                      onClick={() => setMembershipPlan("pro")}
-                    >
-                      <CardHeader className="p-4">
-                        <CardTitle className="text-lg">Pro</CardTitle>
-                        <CardDescription>$29/month</CardDescription>
-                      </CardHeader>
-                      <CardContent className="p-4 pt-0">
-                        <ul className="text-sm space-y-1">
-                          <li>✓ Up to 10 members</li>
-                          <li>✓ Team permissions</li>
-                          <li>✓ Full features</li>
+                          <li>✓ Single user only</li>
+                          <li>✓ Up to 5 store monitors</li>
+                          <li>✓ Real-time inventory sync</li>
+                          <li>✓ Basic analytics dashboard</li>
+                          <li>✓ Email support (24hr response)</li>
+                          <li>✓ Standard API access</li>
                         </ul>
                       </CardContent>
                     </Card>
@@ -298,13 +305,36 @@ function SignupFormContent() {
                     >
                       <CardHeader className="p-4">
                         <CardTitle className="text-lg">Enterprise</CardTitle>
-                        <CardDescription>$99/month</CardDescription>
+                        <CardDescription>$29/month</CardDescription>
                       </CardHeader>
                       <CardContent className="p-4 pt-0">
                         <ul className="text-sm space-y-1">
-                          <li>✓ Unlimited members</li>
-                          <li>✓ Priority support</li>
-                          <li>✓ Advanced analytics</li>
+                          <li>✓ Up to 10 members + 1 Admin</li>
+                          <li>✓ Unlimited store monitors</li>
+                          <li>✓ Automated order processing</li>
+                          <li>✓ Advanced team permissions</li>
+                          <li>✓ Priority email & chat support</li>
+                          <li>✓ Custom integrations</li>
+                        </ul>
+                      </CardContent>
+                    </Card>
+
+                    <Card 
+                      className={`cursor-pointer transition-all ${membershipPlan === "premium" ? "ring-2 ring-primary" : ""}`}
+                      onClick={() => setMembershipPlan("premium")}
+                    >
+                      <CardHeader className="p-4">
+                        <CardTitle className="text-lg">Premium</CardTitle>
+                        <CardDescription>Contact for Pricing</CardDescription>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0">
+                        <ul className="text-sm space-y-1">
+                          <li>✓ Unlimited team members</li>
+                          <li>✓ Dedicated account manager</li>
+                          <li>✓ Custom API rate limits</li>
+                          <li>✓ Advanced security & compliance</li>
+                          <li>✓ Custom feature development</li>
+                          <li>✓ 24/7 priority support</li>
                         </ul>
                       </CardContent>
                     </Card>
@@ -314,11 +344,30 @@ function SignupFormContent() {
             </TabsContent>
 
             <TabsContent value="public_vendor">
-              <div className="bg-muted p-4 rounded-lg">
-                <h3 className="font-semibold mb-2">Public Vendor Account</h3>
-                <p className="text-sm text-muted-foreground">
-                  Join the marketplace and supply products to multiple business users
-                </p>
+              <div className="space-y-4">
+                <div className="bg-muted p-4 rounded-lg">
+                  <h3 className="font-semibold mb-2">Public Vendor Account</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Join the marketplace and supply products to multiple business users
+                  </p>
+                </div>
+                
+                <Card className="border-primary/20">
+                  <CardHeader className="p-4">
+                    <CardTitle className="text-lg">Public Vendor Plan</CardTitle>
+                    <CardDescription>Free to join</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-0">
+                    <ul className="text-sm space-y-1">
+                      <li>✓ Marketplace vendor account</li>
+                      <li>✓ No team members (individual vendor)</li>
+                      <li>✓ Manage your product catalog</li>
+                      <li>✓ Connect with multiple buyers</li>
+                      <li>✓ Track purchase orders</li>
+                      <li>✓ Vendor dashboard & analytics</li>
+                    </ul>
+                  </CardContent>
+                </Card>
               </div>
             </TabsContent>
           </Tabs>
@@ -360,6 +409,15 @@ function SignupFormContent() {
                 onChange={handleChange}
                 required
               />
+              <div className="text-xs text-muted-foreground space-y-1 mt-2">
+                <p className="font-medium">Password must contain:</p>
+                <ul className="list-disc list-inside space-y-0.5 ml-1">
+                  <li>At least 8 characters</li>
+                  <li>At least one special character (!@#$%^&*...)</li>
+                  <li>At least one number (recommended)</li>
+                  <li>At least one uppercase letter (recommended)</li>
+                </ul>
+              </div>
             </div>
 
             <div className="space-y-2">

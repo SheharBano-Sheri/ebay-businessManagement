@@ -359,6 +359,38 @@ function InventoryContent() {
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (selectedProducts.length === 0) {
+      toast.error("No products selected");
+      return;
+    }
+
+    const confirmMessage = `Are you sure you want to delete ${selectedProducts.length} product(s)? This action cannot be undone.`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/products/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productIds: selectedProducts }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message || "Products deleted successfully!");
+        setSelectedProducts([]);
+        fetchProducts();
+      } else {
+        toast.error(data.error || "Failed to delete products");
+      }
+    } catch (error) {
+      toast.error("An error occurred while deleting products");
+    }
+  };
+
   const handleDownloadTemplate = async () => {
     try {
       const response = await fetch("/api/products/export?type=template");
@@ -406,7 +438,17 @@ function InventoryContent() {
       const data = await response.json();
       toast.dismiss(loadingToast);
       if (response.ok) {
-        toast.success(data.message || "CSV uploaded successfully!");
+        // Show detailed success message with created vs updated count
+        if (data.results && data.results.summary) {
+          const summary = data.results.summary;
+          toast.success(
+            `Upload complete! ${summary.created} created, ${summary.updated} updated${summary.failed > 0 ? `, ${summary.failed} failed` : ''}`,
+            { duration: 6000 }
+          );
+        } else {
+          toast.success(data.message || "CSV uploaded successfully!");
+        }
+        
         if (
           data.results &&
           data.results.errors &&
@@ -489,13 +531,23 @@ function InventoryContent() {
               </div>
               <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                 {selectedProducts.length > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedProducts([])}
-                  >
-                    Clear
-                  </Button>
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedProducts([])}
+                    >
+                      Clear
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleBulkDelete}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete Selected ({selectedProducts.length})
+                    </Button>
+                  </>
                 )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

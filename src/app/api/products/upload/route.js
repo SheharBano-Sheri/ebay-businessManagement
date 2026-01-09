@@ -86,6 +86,8 @@ export async function POST(request) {
     const results = {
       success: 0,
       failed: 0,
+      updated: 0,
+      created: 0,
       errors: []
     };
 
@@ -121,8 +123,8 @@ export async function POST(request) {
           continue;
         }
 
-        // Check if product with same SKU exists
-        const existingProduct = await Product.findOne({ adminId, sku });
+        // Check if product with same SKU exists for this admin (prevents duplicates)
+        const existingProduct = await Product.findOne({ adminId, sku: sku.trim() });
         
         // Detect currency from country
         const countryCurrencyMap = {
@@ -142,7 +144,8 @@ export async function POST(request) {
         const detectedCurrency = country ? (countryCurrencyMap[country] || countryCurrencyMap[country.trim()] || 'USD') : 'USD';
         
         if (existingProduct) {
-          // Update existing product
+          // Update existing product - prevents duplicate creation
+          console.log(`Row ${i + 2}: Updating existing product with SKU: ${sku}`);
           existingProduct.country = country || existingProduct.country;
           existingProduct.name = name;
           existingProduct.description = description || existingProduct.description;
@@ -154,7 +157,11 @@ export async function POST(request) {
           existingProduct.currency = detectedCurrency;
           existingProduct.updatedAt = new Date();
           await existingProduct.save();
+          results.updated++;
+          console.log(`Row ${i + 2}: Product updated successfully`);
         } else {
+          // Create new product only if it doesn't exist
+          console.log(`Row ${i + 2}: Creating new product with SKU: ${sku}`);
           // Get vendor details to determine approval status
           const vendor = vendors.find(v => v._id.toString() === vendorId.toString());
           
@@ -184,10 +191,10 @@ export async function POST(request) {
             }
           }
           
-          // Create new product
+          // Create new product - duplicate prevention ensures this only runs for unique SKUs
           await Product.create({
             country,
-            sku,
+            sku: sku.trim(),
             name,
             description,
             type,
@@ -204,6 +211,8 @@ export async function POST(request) {
             approvedBy,
             approvedAt
           });
+          results.created++;
+          console.log(`Row ${i + 2}: Product created successfully`);
         }
 
         results.success++;
@@ -216,9 +225,20 @@ export async function POST(request) {
 
     console.log('Upload results:', results);
 
+    const summaryMessage = `Import completed: ${results.success} successful (${results.created} created, ${results.updated} updated), ${results.failed} failed`;
+
     return NextResponse.json({ 
-      message: `Import completed: ${results.success} successful, ${results.failed} failed`,
-      results 
+      message: summaryMessage,
+      results: {
+        ...results,
+        summary: {
+          total: results.success + results.failed,
+          created: results.created,
+          updated: results.updated,
+          successful: results.success,
+          failed: results.failed
+        }
+      }
     }, { status: 200 });
 
   } catch (error) {

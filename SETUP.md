@@ -20,7 +20,7 @@ Download and install Node.js 18 or higher from [nodejs.org](https://nodejs.org/)
 Verify installation:
 ```bash
 node --version
-npm --version
+npm --version 
 ```
 
 #### Install MongoDB

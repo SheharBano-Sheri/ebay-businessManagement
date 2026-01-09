@@ -81,6 +81,7 @@ const ProductSchema = new mongoose.Schema({
   }
 });
 
-ProductSchema.index({ adminId: 1, sku: 1 });
+// Compound unique index to prevent duplicate SKUs per admin
+ProductSchema.index({ adminId: 1, sku: 1 }, { unique: true });
 
 export default mongoose.models.Product || mongoose.model('Product', ProductSchema);
