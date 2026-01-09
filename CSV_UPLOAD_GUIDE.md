@@ -3,6 +3,37 @@
 ## Overview
 This guide explains how to upload your eBay order data via CSV files into the system.
 
+## 🔄 CSV Reupload & Duplicate Prevention
+
+### Automatic Duplicate Detection
+The system **automatically prevents duplicate orders** when you reupload the same CSV file:
+
+- Each CSV file is uniquely identified by its content hash
+- When you upload a CSV file, the system checks if it has been uploaded before
+- If the same file is detected (even with updated data), **all orders from the previous upload are automatically deleted**
+- The new data from the CSV replaces the old data completely
+- You can safely reupload the same CSV file multiple times without creating duplicates
+
+### How It Works
+1. **First Upload**: CSV is processed → Orders are created with a unique file identifier
+2. **Reupload**: System detects the same file → Deletes previous orders → Inserts updated orders
+3. **Result**: No duplicates, only the latest data from the CSV
+
+### Insertion Fee Handling
+eBay CSV reports include insertion fees (listing fees) in **Column Z** as separate transaction rows:
+
+- **Transaction Type**: `insertion fee`, `listing fee`, or `Insertion`
+- These are automatically processed as separate transactions
+- **One calculation per upload**: Insertion fees are calculated once when the CSV is uploaded
+- **No duplication**: Reuploading the same CSV does not re-add or re-calculate insertion fees
+- They appear in your orders list with the transaction type clearly marked
+
+### Benefits
+- ✅ **No manual cleanup needed** - System handles it automatically
+- ✅ **Data integrity** - Always shows the latest version of your data
+- ✅ **Idempotent uploads** - Same file + same result, every time
+- ✅ **Correct fee calculations** - Insertion fees counted once per upload
+
 ## Prerequisites
 1. Sign up and create an account
 2. Go to the **Accounts** page and create at least one eBay account

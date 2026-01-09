@@ -7,6 +7,12 @@ import Product from '@/models/Product';
 import Account from '@/models/Account';
 import User from '@/models/User';
 import Papa from 'papaparse';
+import crypto from 'crypto';
+
+// Helper function to generate file hash from CSV content
+function generateFileHash(fileContent) {
+  return crypto.createHash('sha256').update(fileContent).digest('hex');
+}
 
 // Helper function to detect report type based on headers
 function detectReportType(headers) {
@@ -124,7 +130,31 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Account not found' }, { status: 404 });
     }
 
-    // If replace mode is enabled, delete existing orders
+    // Read file content
+    const text = await file.text();
+    
+    // Generate file hash to track this specific CSV file
+    const fileHash = generateFileHash(text);
+    console.log('File hash:', fileHash);
+
+    // Check if this exact file has been uploaded before
+    const existingOrdersWithHash = await EbayOrder.countDocuments({ 
+      adminId, 
+      accountId, 
+      fileHash 
+    });
+
+    if (existingOrdersWithHash > 0) {
+      console.log(`Found ${existingOrdersWithHash} existing orders from this file. Deleting them before reupload.`);
+      const deleteResult = await EbayOrder.deleteMany({ 
+        adminId, 
+        accountId, 
+        fileHash 
+      });
+      console.log(`Deleted ${deleteResult.deletedCount} orders from previous upload of this file`);
+    }
+
+    // If replace mode is enabled, delete existing orders (legacy behavior for date range deletion)
     if (replaceMode) {
       const deleteQuery = {
         adminId,
@@ -145,8 +175,6 @@ export async function POST(request) {
       const deleteResult = await EbayOrder.deleteMany(deleteQuery);
       console.log(`Replace mode: Deleted ${deleteResult.deletedCount} existing orders`);
     }
-
-    const text = await file.text();
     
     const parsed = Papa.parse(text, {
       header: true,
@@ -185,6 +213,7 @@ export async function POST(request) {
 
     const ordersToInsert = [];
     const errors = [];
+    const orderNumbersToReplace = new Set(); // Track order numbers for replacement
 
     for (let i = 0; i < parsed.data.length; i++) {
       const row = parsed.data[i];
@@ -222,6 +251,15 @@ export async function POST(request) {
             continue; // Skip payout transactions
           }
           
+          // Normalize insertion fee transaction types (various formats in eBay reports)
+          const normalizedType = orderType.trim().toLowerCase();
+          if (normalizedType === 'insertion fee' || 
+              normalizedType === 'listing fee' || 
+              normalizedType === 'insertion' ||
+              normalizedType.includes('insertion fee')) {
+            orderType = 'insertion fee'; // Standardize the type
+          }
+          
           grossAmount = row['Gross transaction amount'] || row['Gross Amount'] || row['Gross'] || row['gross'] || '0';
           
           // Use the smart fee calculation based on report type
@@ -252,7 +290,8 @@ export async function POST(request) {
         }
 
         // SKU is only required for Order/Sale transactions, not for fees or other types
-        if (!sku && (orderType === 'Order' || orderType === 'Sale')) {
+        const normalizedType = orderType.toLowerCase();
+        if (!sku && (normalizedType === 'order' || normalizedType === 'sale')) {
           errors.push({ 
             row: i + 2,
             error: 'Missing SKU for Order/Sale transaction',
@@ -260,6 +299,9 @@ export async function POST(request) {
           });
           continue;
         }
+
+        // For insertion fees and other fee transactions, SKU is optional
+        // They will use orderNumber as the unique identifier
 
         const grossAmountValue = parseFloat(grossAmount) || 0;
         const feesValue = Math.abs(parseFloat(fees) || 0); // Store as positive
@@ -271,6 +313,7 @@ export async function POST(request) {
           adminId,
           accountId,
           uploadedBy: user._id,
+          fileHash, // Track which CSV file this order came from
           orderNumber,
           sku,
           itemName: itemName || 'Untitled Item',
@@ -295,6 +338,9 @@ export async function POST(request) {
           }
         }
 
+        // Track this order number for replacement
+        orderNumbersToReplace.add(orderNumber);
+        
         ordersToInsert.push(orderData);
       } catch (error) {
         errors.push({ 
@@ -302,6 +348,27 @@ export async function POST(request) {
           error: error.message,
           data: row
         });
+      }
+    }
+
+    // CRITICAL: Delete existing orders with the same order numbers
+    // This ensures reupload replaces data instead of duplicating
+    if (orderNumbersToReplace.size > 0) {
+      const orderNumbersArray = Array.from(orderNumbersToReplace);
+      console.log(`Checking for existing orders with ${orderNumbersArray.length} order numbers...`);
+      
+      const existingOrdersQuery = {
+        adminId,
+        accountId,
+        orderNumber: { $in: orderNumbersArray }
+      };
+      
+      const existingCount = await EbayOrder.countDocuments(existingOrdersQuery);
+      
+      if (existingCount > 0) {
+        console.log(`Found ${existingCount} existing orders to replace`);
+        const deleteResult = await EbayOrder.deleteMany(existingOrdersQuery);
+        console.log(`Deleted ${deleteResult.deletedCount} existing orders before inserting new data`);
       }
     }
 

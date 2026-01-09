@@ -26,7 +26,10 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const adminId = session.user.adminId;
+    // For regular users (owner), adminId is their own ID
+    // For team members, adminId is their admin's ID
+    // For public vendors, they use their own ID
+    const adminId = session.user.adminId || session.user.id;
 
     // Find the product and ensure it belongs to the user's admin
     const product = await Product.findOne({ _id: id, adminId });
@@ -75,7 +78,11 @@ export async function DELETE(request, { params }) {
     await connectDB();
 
     const { id } = params;
-    const adminId = session.user.adminId;
+    
+    // For regular users (owner), adminId is their own ID
+    // For team members, adminId is their admin's ID
+    // For public vendors, they use their own ID
+    const adminId = session.user.adminId || session.user.id;
 
     // Find the product and ensure it belongs to the user's admin
     const product = await Product.findOne({ _id: id, adminId });

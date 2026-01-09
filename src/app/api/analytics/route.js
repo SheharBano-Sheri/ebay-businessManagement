@@ -53,9 +53,33 @@ export async function GET(request) {
         .map(t => t.orderNumber)
     );
 
+    // Track standalone fees (insertion fees, etc.) that aren't tied to orders
+    let standaloneInsertionFees = 0;
+    let standaloneOtherFees = 0;
+
     // Group transactions by order number
     const orderMap = transactions.reduce((acc, t) => {
+      const transactionType = t.transactionType ? t.transactionType.trim().toLowerCase() : '';
+      const description = t.description ? t.description.trim().toLowerCase() : '';
+
+      // Handle standalone insertion fees and other fees separately
+      // These are not tied to specific orders and should be counted globally
+      if (transactionType === 'insertion fee' || transactionType === 'listing fee') {
+        // Use fees field if available, otherwise use netAmount or grossAmount
+        const feeAmount = Math.abs(t.fees || t.netAmount || t.grossAmount || 0);
+        standaloneInsertionFees += feeAmount;
+        return acc; // Don't create an order entry for standalone fees
+      }
+      
+      if (transactionType === 'other fee' || description.includes('transaction fee')) {
+        const feeAmount = Math.abs(t.netAmount || t.fees || t.grossAmount || 0);
+        standaloneOtherFees += feeAmount;
+        return acc; // Don't create an order entry for standalone fees
+      }
+
+      // Skip transactions without order numbers (after handling standalone fees)
       if (!t.orderNumber) return acc;
+      
       const orderNumber = t.orderNumber;
       const isClaimed = claimedOrderNumbers.has(orderNumber);
 
@@ -72,13 +96,11 @@ export async function GET(request) {
       }
 
       const order = acc[orderNumber];
-      const transactionType = t.transactionType ? t.transactionType.trim().toLowerCase() : '';
-      const description = t.description ? t.description.trim().toLowerCase() : '';
 
       // Financial Calculations
       if (!isClaimed) {
         // For non-claimed orders, perform standard financial aggregation
-        if (transactionType === 'order') {
+        if (transactionType === 'order' || transactionType === 'sale') {
           order.grossAmount += t.grossAmount || 0;
           // ONLY accumulate fees from Order transactions
           order.netEffectFees += Math.abs(t.fees || 0);
@@ -87,12 +109,6 @@ export async function GET(request) {
         // REFUNDS REDUCE REVENUE (add refund amount to fees as cost)
         if (transactionType === 'refund') {
           order.netEffectFees += Math.abs(t.grossAmount || 0);
-        } 
-        // Other fees and insertion fees (only these types, not Order types)
-        else if (transactionType === 'other fee' || 
-                 transactionType === 'insertion fee' || 
-                 description.includes('transaction fee')) {
-          order.netEffectFees += Math.abs(t.netAmount || 0);
         }
         
         // SHIPPING LABEL COSTS
@@ -132,7 +148,9 @@ export async function GET(request) {
 
     // Calculate totals from consolidated orders (all positive numbers)
     const grossRevenue = consolidatedOrders.reduce((sum, order) => sum + order.grossAmount, 0);
-    const totalFees = consolidatedOrders.reduce((sum, order) => sum + order.fees, 0); // Already positive
+    const totalFees = consolidatedOrders.reduce((sum, order) => sum + order.fees, 0) 
+                      + standaloneInsertionFees 
+                      + standaloneOtherFees; // Add standalone fees
     const totalSourcingCost = consolidatedOrders.reduce((sum, order) => sum + order.sourcingCost, 0);
     const totalShippingCost = consolidatedOrders.reduce((sum, order) => sum + order.shippingCost, 0);
     
@@ -141,6 +159,16 @@ export async function GET(request) {
     
     // Total costs for display
     const totalCosts = totalFees + totalSourcingCost + totalShippingCost;
+    
+    console.log('Analytics Summary:', {
+      grossRevenue,
+      totalFees,
+      standaloneInsertionFees,
+      standaloneOtherFees,
+      totalSourcingCost,
+      totalShippingCost,
+      netProfit
+    });
 
     // Get inventory value
     const products = await Product.find({ adminId, isActive: true });
@@ -155,10 +183,12 @@ export async function GET(request) {
     return NextResponse.json({
       grossRevenue,
       netProfit,
-      totalFees, // Already positive
+      totalFees, // Already positive (includes order fees + standalone insertion fees + other fees)
       totalCosts,
       totalSourcingCost,
       totalShippingCost,
+      standaloneInsertionFees, // Separate insertion fee amount for transparency
+      standaloneOtherFees, // Other standalone fees
       inventoryValue,
       totalStock,
       ordersCount: consolidatedOrders.length,

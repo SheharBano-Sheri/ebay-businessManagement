@@ -86,6 +86,11 @@ const EbayOrderSchema = new mongoose.Schema({
     username: String,
     email: String
   },
+  fileHash: {
+    type: String,
+    index: true,
+    required: false
+  },
   createdAt: {
     type: Date,
     default: Date.now
