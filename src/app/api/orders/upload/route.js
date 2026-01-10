@@ -59,37 +59,62 @@ function calculateFees(row, reportType) {
 
 // Helper function to parse dates flexibly
 function parseDate(dateStr) {
-  if (!dateStr) return new Date();
+  if (!dateStr || dateStr.trim() === '') return null;
+  
+  const trimmedDate = dateStr.trim();
   
   // Try multiple date formats
   const formats = [
     // MM/DD/YYYY or M/D/YYYY
-    /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
+    { regex: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, order: 'MDY' },
     // YYYY-MM-DD
-    /^(\d{4})-(\d{1,2})-(\d{1,2})$/,
-    // DD-MM-YYYY
-    /^(\d{1,2})-(\d{1,2})-(\d{4})$/,
+    { regex: /^(\d{4})-(\d{1,2})-(\d{1,2})$/, order: 'YMD' },
+    // DD-MM-YYYY or DD/MM/YYYY
+    { regex: /^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/, order: 'DMY' },
   ];
 
   for (const format of formats) {
-    const match = dateStr.match(format);
+    const match = trimmedDate.match(format.regex);
     if (match) {
-      if (format === formats[0]) {
+      let year, month, day;
+      
+      if (format.order === 'MDY') {
         // MM/DD/YYYY
-        return new Date(match[3], match[1] - 1, match[2]);
-      } else if (format === formats[1]) {
+        month = parseInt(match[1]);
+        day = parseInt(match[2]);
+        year = parseInt(match[3]);
+      } else if (format.order === 'YMD') {
         // YYYY-MM-DD
-        return new Date(match[1], match[2] - 1, match[3]);
-      } else if (format === formats[2]) {
+        year = parseInt(match[1]);
+        month = parseInt(match[2]);
+        day = parseInt(match[3]);
+      } else if (format.order === 'DMY') {
         // DD-MM-YYYY
-        return new Date(match[3], match[2] - 1, match[1]);
+        day = parseInt(match[1]);
+        month = parseInt(match[2]);
+        year = parseInt(match[3]);
       }
+      
+      // Validate month and day ranges
+      if (month < 1 || month > 12) return null;
+      if (day < 1 || day > 31) return null;
+      if (year < 1900 || year > 2100) return null;
+      
+      const date = new Date(year, month - 1, day);
+      
+      // Verify the date is valid (handles things like Feb 31)
+      if (date.getFullYear() === year && 
+          date.getMonth() === month - 1 && 
+          date.getDate() === day) {
+        return date;
+      }
+      return null;
     }
   }
 
   // Fallback to standard Date parsing
-  const date = new Date(dateStr);
-  return isNaN(date.getTime()) ? new Date() : date;
+  const date = new Date(trimmedDate);
+  return isNaN(date.getTime()) ? null : date;
 }
 
 export async function POST(request) {
@@ -133,8 +158,29 @@ export async function POST(request) {
     // Read file content
     const text = await file.text();
     
+    // Clean the text content - remove BOM and normalize line endings
+    const cleanedText = text
+      .replace(/^\uFEFF/, '') // Remove BOM
+      .replace(/\r\n/g, '\n') // Normalize line endings
+      .replace(/\r/g, '\n');
+    
+    // Detect delimiter by checking the first line
+    const firstLine = cleanedText.split('\n')[0];
+    let delimiter = ',';
+    const tabCount = (firstLine.match(/\t/g) || []).length;
+    const commaCount = (firstLine.match(/,/g) || []).length;
+    const semicolonCount = (firstLine.match(/;/g) || []).length;
+    
+    if (tabCount > commaCount && tabCount > semicolonCount) {
+      delimiter = '\t';
+    } else if (semicolonCount > commaCount && semicolonCount > tabCount) {
+      delimiter = ';';
+    }
+    
+    console.log(`Detected delimiter: ${delimiter === '\t' ? 'TAB' : delimiter} (tab:${tabCount}, comma:${commaCount}, semicolon:${semicolonCount})`);
+    
     // Generate file hash to track this specific CSV file
-    const fileHash = generateFileHash(text);
+    const fileHash = generateFileHash(cleanedText);
     console.log('File hash:', fileHash);
 
     // Check if this exact file has been uploaded before
@@ -176,17 +222,38 @@ export async function POST(request) {
       console.log(`Replace mode: Deleted ${deleteResult.deletedCount} existing orders`);
     }
     
-    const parsed = Papa.parse(text, {
+    const parsed = Papa.parse(cleanedText, {
       header: true,
       skipEmptyLines: true,
       transformHeader: (header) => header.trim(),
-      delimitersToGuess: [',', '\t', '|', ';']
+      delimiter: delimiter, // Use detected delimiter
+      dynamicTyping: false,
+      newline: '\n',
+      quoteChar: '"',
+      escapeChar: '"'
     });
 
     console.log('CSV parsed:', parsed.data.length, 'rows');
     const headers = Object.keys(parsed.data[0] || {});
     if (parsed.data.length > 0) {
       console.log('CSV Headers:', headers);
+      console.log('First row sample:', JSON.stringify(parsed.data[0]).substring(0, 500));
+    }
+
+    // Validate CSV is not empty
+    if (parsed.data.length === 0) {
+      return NextResponse.json({ 
+        error: 'CSV file is empty. Please upload a file with order data.',
+        validationError: true
+      }, { status: 400 });
+    }
+
+    // Validate CSV has headers
+    if (headers.length === 0) {
+      return NextResponse.json({ 
+        error: 'CSV file has no headers. Please ensure your CSV has column headers in the first row.',
+        validationError: true
+      }, { status: 400 });
     }
 
     // Only fail on critical parsing errors, not field mismatches
@@ -197,8 +264,9 @@ export async function POST(request) {
     if (criticalErrors.length > 0) {
       console.error('CSV parsing errors:', criticalErrors);
       return NextResponse.json({ 
-        error: 'CSV parsing error - unable to read file',
-        details: criticalErrors
+        error: 'CSV parsing error - unable to read file. Please check the CSV format and encoding.',
+        details: criticalErrors.slice(0, 3), // Show first 3 errors
+        validationError: true
       }, { status: 400 });
     }
     
@@ -210,6 +278,11 @@ export async function POST(request) {
     // Detect report type for proper fee calculation
     const reportType = detectReportType(headers);
     console.log('Detected report type:', reportType);
+    console.log('CSV Headers detected:', headers.join(', '));
+
+    // Don't block upload based on column names - let row-level validation handle it
+    // Different eBay regions/versions have different column names
+    // The row parsing logic already handles various column name variations
 
     const ordersToInsert = [];
     const errors = [];
@@ -239,11 +312,44 @@ export async function POST(request) {
         } else {
           // Handle eBay report format (original upload)
           // Map eBay CSV columns to schema fields
-          orderNumber = row['Order number'] || row['Order #'] || row['Order Number'] || row['orderNumber'] || row['order_number'];
-          sku = row['Custom label'] || row['SKU'] || row['sku'] || '--';
-          itemName = row['Item title'] || row['Item'] || row['Title'] || row['itemTitle'] || row['Item Title'] || '--';
+          // Support multiple eBay column name variations across different regions/versions
+          orderNumber = row['Order number'] || 
+                        row['Order #'] || 
+                        row['Order Number'] || 
+                        row['orderNumber'] || 
+                        row['order_number'] ||
+                        row['Order ID'] ||
+                        row['OrderID'] ||
+                        row['Sales record number'] ||
+                        row['Sales Record Number'] ||
+                        row['Extended order ID'] ||
+                        row['Extended Order ID'] ||
+                        row['Legacy order ID'] ||
+                        row['Transaction ID'] ||
+                        row['TransactionID'];
+          
+          // Fallback: If no order number, generate one from Transaction ID or Item ID
+          if (!orderNumber || orderNumber.trim() === '') {
+            const transactionId = row['Transaction ID'] || row['TransactionID'];
+            const itemId = row['Item ID'] || row['ItemID'];
+            const legacyId = row['Legacy order ID'];
+            
+            if (transactionId) {
+              orderNumber = transactionId;
+            } else if (legacyId) {
+              orderNumber = legacyId;
+            } else if (itemId) {
+              orderNumber = `ITEM-${itemId}`;
+            } else {
+              // Last resort: generate from row index and timestamp
+              orderNumber = `ORD-${Date.now()}-${i}`;
+            }
+          }
+                        
+          sku = row['Custom label'] || row['SKU'] || row['sku'] || row['Custom Label'] || '--';
+          itemName = row['Item title'] || row['Item'] || row['Title'] || row['itemTitle'] || row['Item Title'] || row['Item ID'] || '--';
           quantity = row['Quantity'] || row['Qty'] || row['quantity'] || '1';
-          const rawOrderType = row['Type'] || row['Transaction type'] || row['Order Type'] || 'Sale';
+          const rawOrderType = row['Type'] || row['Transaction type'] || row['Order Type'] || row['Transaction Type'] || 'Sale';
           orderType = rawOrderType;
           
           // EXCLUDE PAYOUT TRANSACTIONS (matching reference implementation)
@@ -271,7 +377,13 @@ export async function POST(request) {
           sourcingCost = row['Sourcing Cost'] || row['Cost'] || row['sourcing_cost'] || '0';
           shippingCost = row['Postage and packaging'] || row['Shipping Cost'] || row['Shipping'] || row['shipping'] || '0';
           currency = row['Transaction currency'] || row['Currency'] || row['currency'] || account.defaultCurrency || 'USD';
-          orderDate = row['Transaction creation date'] || row['Date'] || row['Order Date'] || row['date'];
+          orderDate = row['Transaction creation date'] || 
+                      row['Transaction Creation Date'] ||
+                      row['Date'] || 
+                      row['Order Date'] || 
+                      row['date'] ||
+                      row['Created Date'] ||
+                      row['Creation Date'];
         }
 
         // EXCLUDE PAYOUT TRANSACTIONS for all formats
@@ -279,23 +391,49 @@ export async function POST(request) {
           continue;
         }
 
-        // Validate required fields
-        if (!orderNumber) {
+        // Validate required fields - order number should now always exist due to fallback
+        if (!orderNumber || orderNumber.trim() === '') {
+          // Log the actual row data to help debug column name issues
+          if (errors.length === 0) {
+            console.error('Row missing order number after fallback. Available columns:', Object.keys(row));
+            console.error('First row data sample:', JSON.stringify(row).substring(0, 300));
+          }
+          
           errors.push({ 
             row: i + 2,
-            error: 'Missing Order Number',
-            data: row
+            error: 'Unable to determine order identifier - no Order Number, Transaction ID, or Item ID found',
+            data: { 
+              availableColumns: errors.length === 0 ? Object.keys(row).join(', ') : 'See first error'
+            }
+          });
+          continue;
+        }
+
+        // Validate date format
+        const parsedDate = parseDate(orderDate);
+        if (!orderDate || isNaN(parsedDate.getTime())) {
+          errors.push({ 
+            row: i + 2,
+            error: `Invalid date format: "${orderDate}". Expected formats: MM/DD/YYYY, YYYY-MM-DD, or DD-MM-YYYY`,
+            data: { 
+              orderNumber,
+              date: orderDate || '(empty)'
+            }
           });
           continue;
         }
 
         // SKU is only required for Order/Sale transactions, not for fees or other types
-        const normalizedType = orderType.toLowerCase();
+        const normalizedType = (orderType || '').toLowerCase().trim();
         if (!sku && (normalizedType === 'order' || normalizedType === 'sale')) {
           errors.push({ 
             row: i + 2,
-            error: 'Missing SKU for Order/Sale transaction',
-            data: row
+            error: 'Missing SKU for Order/Sale transaction - SKU is required for sales',
+            data: { 
+              orderNumber,
+              type: orderType,
+              sku: '(empty)'
+            }
           });
           continue;
         }
@@ -308,6 +446,17 @@ export async function POST(request) {
         const netAmountValue = parseFloat(netAmount) || 0;
         const sourcingCostValue = parseFloat(sourcingCost) || 0;
         const shippingCostValue = parseFloat(shippingCost) || 0;
+
+        // Parse and validate the date
+        const parsedOrderDate = parseDate(orderDate);
+        if (!parsedOrderDate) {
+          errors.push({ 
+            row: i + 2,
+            error: `Invalid date: "${orderDate}"`,
+            data: { orderNumber, date: orderDate }
+          });
+          continue;
+        }
 
         const orderData = {
           adminId,
@@ -327,7 +476,7 @@ export async function POST(request) {
           shippingCost: shippingCostValue,
           grossProfit: grossAmountValue - feesValue - sourcingCostValue - shippingCostValue, // All positive now
           currency,
-          orderDate: parseDate(orderDate)
+          orderDate: parsedOrderDate
         };
 
         // Try to find matching product by SKU
@@ -389,21 +538,60 @@ export async function POST(request) {
             });
           });
           insertedOrders = error.insertedDocs || [];
+        } else {
+          // Unknown insertion error
+          return NextResponse.json({ 
+            error: 'Database error during order insertion. Please try again or contact support.',
+            technicalDetails: error.message
+          }, { status: 500 });
         }
       }
     }
 
     console.log(`Upload complete: ${insertedOrders.length} imported, ${errors.length} errors`);
 
+    // If all rows failed, return error response
+    if (insertedOrders.length === 0 && errors.length > 0) {
+      const errorSummary = errors.slice(0, 5).map(e => `Row ${e.row}: ${e.error}`).join('\n');
+      return NextResponse.json({ 
+        error: `No orders were imported. Found ${errors.length} error(s) in the CSV file.`,
+        errorSummary,
+        imported: 0,
+        errors: errors.length,
+        errorDetails: errors,
+        validationError: true
+      }, { status: 400 });
+    }
+
     return NextResponse.json({
-      message: 'CSV upload complete',
+      message: errors.length > 0 
+        ? `CSV upload complete with some errors` 
+        : 'CSV upload successful',
       imported: insertedOrders.length,
       errors: errors.length,
-      errorDetails: errors
+      errorDetails: errors,
+      success: true
     }, { status: 200 });
 
   } catch (error) {
     console.error('Upload CSV error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    
+    // Provide more specific error messages based on error type
+    let errorMessage = 'Internal server error';
+    let technicalDetails = error.message;
+    
+    if (error.name === 'MongoError' || error.name === 'MongoServerError') {
+      errorMessage = 'Database error occurred while saving orders. Please try again.';
+    } else if (error.message.includes('File') || error.message.includes('parse')) {
+      errorMessage = 'Failed to read or parse CSV file. Please ensure the file is a valid CSV.';
+    } else if (error.message.includes('timeout')) {
+      errorMessage = 'Upload timeout. Try uploading a smaller file or check your connection.';
+    }
+    
+    return NextResponse.json({ 
+      error: errorMessage,
+      technicalDetails,
+      validationError: false
+    }, { status: 500 });
   }
 }

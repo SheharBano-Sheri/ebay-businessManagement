@@ -431,7 +431,9 @@ export default function OrdersPage() {
             percentage: 100,
           });
 
-          toast.success(`Imported ${data.imported} orders successfully!`);
+          if (data.imported > 0) {
+            toast.success(`Imported ${data.imported} orders successfully!`);
+          }
           if (data.errors > 0) {
             toast.warning(
               `${data.errors} rows had errors. Check the upload dialog for details.`
@@ -439,17 +441,37 @@ export default function OrdersPage() {
           }
           fetchOrders();
         } else {
+          // Enhanced error handling for validation errors
+          const errorMessage = data.error || "Upload failed";
+          const errorDetails = data.errorDetails || [];
+          
+          // If it's a validation error with missing columns
+          if (data.missingColumns) {
+            toast.error(
+              `CSV validation failed: Missing columns - ${data.missingColumns.join(', ')}`,
+              { duration: 8000 }
+            );
+          } else if (data.validationError) {
+            toast.error(errorMessage, { duration: 6000 });
+          } else {
+            toast.error(errorMessage);
+          }
+
           setUploadProgress({
             isOpen: true,
             status: "error",
-            imported: 0,
-            errors: 0,
+            imported: data.imported || 0,
+            errors: data.errors || 0,
             total: 0,
-            errorDetails: [{ error: data.error || "Upload failed" }],
+            errorDetails: errorDetails.length > 0 
+              ? errorDetails 
+              : [{ 
+                  error: errorMessage,
+                  details: data.errorSummary || data.technicalDetails || ''
+                }],
             currentRow: 0,
             percentage: 0,
           });
-          toast.error(data.error || "Upload failed");
         }
       } catch (error) {
         clearInterval(progressInterval);
@@ -1526,11 +1548,53 @@ export default function OrdersPage() {
             )}
 
             {uploadProgress.status === "error" && (
-              <div className="rounded-lg border bg-red-50 p-4">
-                <p className="text-sm text-red-700">
-                  {uploadProgress.errorDetails[0]?.error ||
-                    "Unknown error occurred"}
-                </p>
+              <div className="space-y-3">
+                <div className="rounded-lg border bg-red-50 p-4">
+                  <p className="font-semibold text-red-700 mb-2">Error Details</p>
+                  <div className="text-sm text-red-700 space-y-2">
+                    <p className="font-medium">
+                      {uploadProgress.errorDetails[0]?.error || "Unknown error occurred"}
+                    </p>
+                    {uploadProgress.errorDetails[0]?.details && (
+                      <pre className="mt-2 p-2 bg-red-100 rounded text-xs overflow-x-auto whitespace-pre-wrap">
+                        {uploadProgress.errorDetails[0].details}
+                      </pre>
+                    )}
+                  </div>
+                </div>
+
+                {/* Show row-level errors if present */}
+                {uploadProgress.errorDetails.length > 1 && (
+                  <div className="rounded-lg border bg-amber-50 p-3">
+                    <p className="text-sm font-medium text-amber-700 mb-2">
+                      Row Errors: {uploadProgress.errorDetails.length}
+                    </p>
+                    <div className="mt-2 max-h-60 overflow-y-auto text-xs text-amber-700 space-y-1 border border-amber-200 rounded p-2 bg-white">
+                      {uploadProgress.errorDetails.slice(0, 20).map((err, idx) => (
+                        <div key={idx} className="py-1 border-b border-amber-200 last:border-b-0">
+                          {err.row && <span className="font-semibold">Row {err.row}: </span>}
+                          {err.error}
+                        </div>
+                      ))}
+                      {uploadProgress.errorDetails.length > 20 && (
+                        <div className="py-1 font-medium">
+                          ...and {uploadProgress.errorDetails.length - 20} more errors
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Show helpful tips */}
+                <div className="rounded-lg border bg-blue-50 p-3">
+                  <p className="text-sm font-medium text-blue-700 mb-1">💡 Tips:</p>
+                  <ul className="text-xs text-blue-600 space-y-1 list-disc list-inside">
+                    <li>Ensure your CSV has required columns: Order Number, Date</li>
+                    <li>Use date format: MM/DD/YYYY, YYYY-MM-DD, or DD-MM-YYYY</li>
+                    <li>SKU is required for Sale/Order transactions</li>
+                    <li>Check for empty cells in required columns</li>
+                  </ul>
+                </div>
               </div>
             )}
           </div>
