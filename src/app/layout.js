@@ -17,6 +17,9 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: "GenieBMS",
   description: "Genie Business Management System",
+  icons: {
+    icon: '/logo.png', // Uses the logo.png from the public folder as the tab icon
+  },
 };
 
 export default function RootLayout({ children }) {
