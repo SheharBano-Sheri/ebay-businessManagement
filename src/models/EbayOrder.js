@@ -71,6 +71,10 @@ const EbayOrderSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  insertionFee: {
+    type: Number,
+    default: 0
+  },
   grossProfit: {
     type: Number,
     default: 0
@@ -110,19 +114,11 @@ EbayOrderSchema.pre('save', async function() {
 EbayOrderSchema.pre(['findOneAndUpdate', 'updateOne', 'updateMany'], function() {
   const update = this.getUpdate();
   
-  // If any of the cost fields are being updated, we need to recalculate grossProfit
-  if (update.$set && (update.$set.fees !== undefined || update.$set.sourcingCost !== undefined || update.$set.shippingCost !== undefined || update.$set.grossAmount !== undefined)) {
-    // We'll handle this in the route by fetching the order first
-    // This middleware serves as documentation that grossProfit needs recalculation
+  // If any of the cost fields are being updated, we need to recalculate gross profit
+  if (update.grossAmount || update.fees || update.sourcingCost || update.shippingCost) {
+    // Note: detailed recalculation logic typically happens in the route handler 
+    // or requires fetching the doc first, as we only have the update delta here
   }
 });
 
-// Index for fast lookups
-EbayOrderSchema.index({ adminId: 1, orderDate: -1 });
-EbayOrderSchema.index({ adminId: 1, sku: 1 });
-
-// Always delete cached model to pick up schema changes in development
-delete mongoose.connection.models['EbayOrder'];
-
-const EbayOrder = mongoose.model('EbayOrder', EbayOrderSchema);
-export default EbayOrder;
+export default mongoose.models.EbayOrder || mongoose.model('EbayOrder', EbayOrderSchema);
