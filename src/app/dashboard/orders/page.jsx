@@ -1364,7 +1364,7 @@ export default function OrdersPage() {
                   <span className="h-1 w-8 bg-primary rounded"></span>
                   Order Summary
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-6">
                   <div className="space-y-1">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                       Total Orders
@@ -1394,6 +1394,19 @@ export default function OrdersPage() {
                       {formatCurrency(
                         filteredOrders.reduce(
                           (sum, o) => sum + Math.abs(o.fees),
+                          0
+                        )
+                      )}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Insertion Fees
+                    </p>
+                    <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
+                      {formatCurrency(
+                        filteredOrders.reduce(
+                          (sum, o) => sum + (o.insertionFee || 0),
                           0
                         )
                       )}
@@ -1550,10 +1563,13 @@ export default function OrdersPage() {
             {uploadProgress.status === "error" && (
               <div className="space-y-3">
                 <div className="rounded-lg border bg-red-50 p-4">
-                  <p className="font-semibold text-red-700 mb-2">Error Details</p>
+                  <p className="font-semibold text-red-700 mb-2">
+                    Error Details
+                  </p>
                   <div className="text-sm text-red-700 space-y-2">
                     <p className="font-medium">
-                      {uploadProgress.errorDetails[0]?.error || "Unknown error occurred"}
+                      {uploadProgress.errorDetails[0]?.error ||
+                        "Unknown error occurred"}
                     </p>
                     {uploadProgress.errorDetails[0]?.details && (
                       <pre className="mt-2 p-2 bg-red-100 rounded text-xs overflow-x-auto whitespace-pre-wrap">
@@ -1570,15 +1586,25 @@ export default function OrdersPage() {
                       Row Errors: {uploadProgress.errorDetails.length}
                     </p>
                     <div className="mt-2 max-h-60 overflow-y-auto text-xs text-amber-700 space-y-1 border border-amber-200 rounded p-2 bg-white">
-                      {uploadProgress.errorDetails.slice(0, 20).map((err, idx) => (
-                        <div key={idx} className="py-1 border-b border-amber-200 last:border-b-0">
-                          {err.row && <span className="font-semibold">Row {err.row}: </span>}
-                          {err.error}
-                        </div>
-                      ))}
+                      {uploadProgress.errorDetails
+                        .slice(0, 20)
+                        .map((err, idx) => (
+                          <div
+                            key={idx}
+                            className="py-1 border-b border-amber-200 last:border-b-0"
+                          >
+                            {err.row && (
+                              <span className="font-semibold">
+                                Row {err.row}:{" "}
+                              </span>
+                            )}
+                            {err.error}
+                          </div>
+                        ))}
                       {uploadProgress.errorDetails.length > 20 && (
                         <div className="py-1 font-medium">
-                          ...and {uploadProgress.errorDetails.length - 20} more errors
+                          ...and {uploadProgress.errorDetails.length - 20} more
+                          errors
                         </div>
                       )}
                     </div>
@@ -1587,10 +1613,16 @@ export default function OrdersPage() {
 
                 {/* Show helpful tips */}
                 <div className="rounded-lg border bg-blue-50 p-3">
-                  <p className="text-sm font-medium text-blue-700 mb-1">💡 Tips:</p>
+                  <p className="text-sm font-medium text-blue-700 mb-1">
+                    💡 Tips:
+                  </p>
                   <ul className="text-xs text-blue-600 space-y-1 list-disc list-inside">
-                    <li>Ensure your CSV has required columns: Order Number, Date</li>
-                    <li>Use date format: MM/DD/YYYY, YYYY-MM-DD, or DD-MM-YYYY</li>
+                    <li>
+                      Ensure your CSV has required columns: Order Number, Date
+                    </li>
+                    <li>
+                      Use date format: MM/DD/YYYY, YYYY-MM-DD, or DD-MM-YYYY
+                    </li>
                     <li>SKU is required for Sale/Order transactions</li>
                     <li>Check for empty cells in required columns</li>
                   </ul>
