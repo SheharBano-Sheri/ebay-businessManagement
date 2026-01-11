@@ -52,6 +52,7 @@ import {
   CheckCircle2,
   Truck,
   Printer,
+  FileSpreadsheet,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -444,11 +445,13 @@ export default function OrdersPage() {
           // Enhanced error handling for validation errors
           const errorMessage = data.error || "Upload failed";
           const errorDetails = data.errorDetails || [];
-          
+
           // If it's a validation error with missing columns
           if (data.missingColumns) {
             toast.error(
-              `CSV validation failed: Missing columns - ${data.missingColumns.join(', ')}`,
+              `CSV validation failed: Missing columns - ${data.missingColumns.join(
+                ", "
+              )}`,
               { duration: 8000 }
             );
           } else if (data.validationError) {
@@ -463,12 +466,15 @@ export default function OrdersPage() {
             imported: data.imported || 0,
             errors: data.errors || 0,
             total: 0,
-            errorDetails: errorDetails.length > 0 
-              ? errorDetails 
-              : [{ 
-                  error: errorMessage,
-                  details: data.errorSummary || data.technicalDetails || ''
-                }],
+            errorDetails:
+              errorDetails.length > 0
+                ? errorDetails
+                : [
+                    {
+                      error: errorMessage,
+                      details: data.errorSummary || data.technicalDetails || "",
+                    },
+                  ],
             currentRow: 0,
             percentage: 0,
           });
@@ -616,6 +622,35 @@ export default function OrdersPage() {
     },
     [exportDateRange, isExporting, orders]
   );
+
+  // New function to download CSV template
+  const handleDownloadTemplate = () => {
+    const headers = [
+      "Date",
+      "Order #",
+      "SKU",
+      "Item Name",
+      "Quantity",
+      "Transaction Type",
+      "Gross Amount",
+      "Fees",
+      "Sourcing Cost",
+      "Shipping Cost",
+      "Gross Profit",
+    ];
+
+    const csvContent = headers.join(",");
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "orders_template.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    toast.success("Template downloaded");
+  };
 
   const exportOrdersToCSV = (ordersToExport, filename) => {
     const headers = [
@@ -1040,6 +1075,11 @@ export default function OrdersPage() {
                 >
                   <Download className="mr-2 h-4 w-4" />
                   Export Date Range
+                </Button>
+                {/* NEW: Download Template Button */}
+                <Button variant="outline" onClick={handleDownloadTemplate}>
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Download Template
                 </Button>
                 <div className="flex items-center gap-2">
                   <label className="flex items-center gap-2 text-sm">
