@@ -442,6 +442,7 @@ export async function POST(request) {
         // They will use orderNumber as the unique identifier
 
         const grossAmountValue = parseFloat(grossAmount) || 0;
+        const insertionFeeValue = parseFloat((row['eBay collected tax'] === '--' ? '0' : row['eBay collected tax']) || '0') || 0;
         const feesValue = Math.abs(parseFloat(fees) || 0); // Store as positive
         const netAmountValue = parseFloat(netAmount) || 0;
         const sourcingCostValue = parseFloat(sourcingCost) || 0;
@@ -470,6 +471,7 @@ export async function POST(request) {
           transactionType: orderType,
           grossAmount: grossAmountValue,
           fees: feesValue, // Now positive
+          insertionFee: insertionFeeValue,
           netAmount: netAmountValue,
           description: description || '',
           sourcingCost: sourcingCostValue,
