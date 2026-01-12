@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]/route';
 import connectDB from '@/lib/mongodb';
 import Account from '@/models/Account';
+import EbayOrder from '@/models/EbayOrder';
 import User from '@/models/User';
 
 // GET all accounts for the logged-in admin
@@ -146,13 +147,21 @@ export async function DELETE(request) {
 
     const adminId = user.adminId || user._id;
 
+    // Delete the account
     const account = await Account.findOneAndDelete({ _id: accountId, adminId });
 
     if (!account) {
       return NextResponse.json({ error: 'Account not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ message: 'Account deleted successfully' });
+    // CASCADE DELETE: Remove all orders associated with this account
+    const deleteResult = await EbayOrder.deleteMany({ accountId: account._id });
+    console.log(`Deleted account ${account._id} and ${deleteResult.deletedCount} associated orders`);
+
+    return NextResponse.json({ 
+      message: 'Account and associated orders deleted successfully',
+      deletedOrders: deleteResult.deletedCount 
+    });
   } catch (error) {
     console.error('Error deleting account:', error);
     return NextResponse.json({ error: 'Failed to delete account' }, { status: 500 });

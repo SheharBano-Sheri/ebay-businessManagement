@@ -5,6 +5,7 @@ import connectDB from '@/lib/mongodb';
 import EbayOrder from '@/models/EbayOrder';
 import Product from '@/models/Product';
 import User from '@/models/User';
+import Account from '@/models/Account';
 import { checkPermission } from '@/lib/permissions';
 
 export async function GET(request) {
@@ -36,6 +37,12 @@ export async function GET(request) {
 
     if (accountId && accountId !== 'all') {
       query.accountId = accountId;
+    } else {
+      // If fetching all accounts, only include orders from ACTIVE accounts
+      // This filters out orders from deleted accounts
+      const activeAccounts = await Account.find({ adminId }).select('_id');
+      const activeAccountIds = activeAccounts.map(acc => acc._id);
+      query.accountId = { $in: activeAccountIds };
     }
 
     const orders = await EbayOrder.find(query)
@@ -82,14 +89,15 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const adminId = session.user.adminId;
+    // Use the user object returned from checkPermission
+    const adminId = user.adminId || user._id;
 
     // Try to link to product
     const product = await Product.findOne({ adminId, sku });
 
     const order = await EbayOrder.create({
       adminId,
-      uploadedBy: session.user.id,
+      uploadedBy: user._id,
       orderNumber,
       orderDate: new Date(orderDate),
       sku,
