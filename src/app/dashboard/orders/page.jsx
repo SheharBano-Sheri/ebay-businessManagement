@@ -184,6 +184,24 @@ export default function OrdersPage() {
     }
   }, [session, fetchAccounts, fetchOrders, recalculateGrossProfit]);
 
+  // NEW: Sync currency with selected account
+  useEffect(() => {
+    if (accounts.length > 0) {
+      if (selectedAccount !== "all") {
+        // If specific account selected, use its currency
+        const account = accounts.find((a) => a._id === selectedAccount);
+        if (account?.defaultCurrency) {
+          setCurrency(account.defaultCurrency);
+        }
+      } else {
+        // If "all" selected (or default), pick the first available account's currency
+        if (accounts[0]?.defaultCurrency) {
+          setCurrency(accounts[0].defaultCurrency);
+        }
+      }
+    }
+  }, [selectedAccount, accounts]);
+
   const handleStatusUpdate = async (orderId, newStatus) => {
     // Optimistic UI update
     const previousPurchases = [...vendorPurchases];
