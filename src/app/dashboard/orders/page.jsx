@@ -1439,7 +1439,7 @@ export default function OrdersPage() {
                       )}
                     </p>
                   </div>
-                  <div className="space-y-1">
+                  {/* <div className="space-y-1">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                       Insertion Fees
                     </p>
@@ -1451,7 +1451,7 @@ export default function OrdersPage() {
                         )
                       )}
                     </p>
-                  </div>
+                  </div> */}
                   <div className="space-y-1">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                       Total Costs

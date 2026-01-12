@@ -326,6 +326,9 @@ export async function POST(request) {
     // Group rows by Order Number to handle multiple lines (Order, Fees, Refunds)
     const orderGroups = new Map();
 
+    // Store monthly insertion fees (Key: "YYYY-MM", Value: {total: 0, date: Date})
+    const insertionFeesByMonth = new Map();
+
     // First Pass: Grouping
     for (let i = 0; i < parsed.data.length; i++) {
       const row = parsed.data[i];
@@ -402,7 +405,6 @@ export async function POST(request) {
         let totalNet = 0;
         let totalSourcingCost = 0;
         let totalShippingCost = 0; // Seller's expense
-        let totalInsertionFee = 0;
 
         // METADATA VARIABLES - Scan ALL rows to find these
         let sku = "--";
@@ -528,13 +530,41 @@ export async function POST(request) {
             }
 
             // Insertion Fee / Tax Mapping
-            // Map 'eBay collected tax' to insertionFee as requested
+            // Separate 'eBay collected tax' from individual order calculations
+            // Aggregate it globally by month instead
             const rTax = parseFloat(
               (r["eBay collected tax"] === "--"
                 ? "0"
                 : r["eBay collected tax"]) || "0"
             );
-            totalInsertionFee += rTax;
+
+            if (rTax > 0) {
+              // Determine the month for this tax
+              // Use the date from the current row or fallback to orderDate
+              const taxDateStr =
+                r["Transaction creation date"] || r["Date"] || orderDate;
+              const taxDate = parseDate(taxDateStr);
+
+              if (taxDate) {
+                const monthKey = `${taxDate.getFullYear()}-${taxDate.getMonth()}`; // e.g., "2024-0"
+
+                if (!insertionFeesByMonth.has(monthKey)) {
+                  insertionFeesByMonth.set(monthKey, {
+                    total: 0,
+                    date: new Date(
+                      taxDate.getFullYear(),
+                      taxDate.getMonth(),
+                      1
+                    ), // 1st of the month
+                    monthName: taxDate.toLocaleString("default", {
+                      month: "long",
+                    }),
+                  });
+                }
+
+                insertionFeesByMonth.get(monthKey).total += rTax;
+              }
+            }
           });
 
           // Re-align Fees to ensure Gross - Fees = Net
@@ -565,7 +595,7 @@ export async function POST(request) {
           transactionType: orderType,
           grossAmount: totalGross,
           fees: Math.abs(totalFees), // Store as positive
-          insertionFee: totalInsertionFee,
+          insertionFee: 0, // Insertion fees are now handled separately
           netAmount: totalNet,
           description: description || "",
           sourcingCost: totalSourcingCost,
@@ -604,6 +634,40 @@ export async function POST(request) {
           error: err.message,
           data: rows[0],
         });
+      }
+    }
+
+    // Process Accumulated Insertion Fees (Create separate orders)
+    for (const [key, data] of insertionFeesByMonth) {
+      if (data.total > 0) {
+        // Create a summary order for insertion fees
+        // Order Number is "Insertion Fee" (or generic), Type is "Insertion Fee", Gross is Sum
+        const summaryOrderNumber = `Insertion Fee`;
+
+        const summaryOrder = {
+          adminId,
+          accountId,
+          uploadedBy: user._id,
+          fileHash,
+          orderNumber: summaryOrderNumber,
+          sku: "--",
+          itemName: `Total Insertion Fees (${data.monthName})`,
+          orderedQty: 1,
+          transactionType: "Insertion Fee",
+          grossAmount: data.total, // Sum of all collected taxes
+          fees: 0,
+          insertionFee: 0,
+          netAmount: 0, // Or should it be -data.total? Sticking to user request "Gross Amount may Sum"
+          description: `Aggregated insertion fees for ${data.monthName}`,
+          sourcingCost: 0,
+          shippingCost: 0,
+          grossProfit: data.total, // Since expenses are 0, this looks like profit, but it's just a record
+          currency: account.defaultCurrency || "USD",
+          orderDate: data.date, // 1st of the month
+        };
+
+        ordersToInsert.push(summaryOrder);
+        orderNumbersToReplace.add(summaryOrderNumber);
       }
     }
 
