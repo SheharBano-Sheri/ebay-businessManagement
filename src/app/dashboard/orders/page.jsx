@@ -433,7 +433,9 @@ export default function OrdersPage() {
           });
 
           if (data.imported > 0) {
-            toast.success(`Imported ${data.imported} orders successfully!`);
+            toast.success(
+              data.message || `Imported ${data.imported} orders successfully!`
+            );
           }
           if (data.errors > 0) {
             toast.warning(
@@ -625,31 +627,33 @@ export default function OrdersPage() {
 
   // New function to download CSV template
   const handleDownloadTemplate = () => {
-    const headers = [
-      "Date",
-      "Order #",
-      "SKU",
-      "Item Name",
-      "Quantity",
-      "Transaction Type",
-      "Gross Amount",
-      "Fees",
-      "Sourcing Cost",
-      "Shipping Cost",
-      "Gross Profit",
-    ];
+    // Generate template with existing orders for cost updates
+    const headers = ["Order #", "Sourcing Cost", "Shipping Cost"];
 
-    const csvContent = headers.join(",");
+    // Use currently loaded orders to populate the template
+    const csvData = filteredOrders.map((order) => [
+      order.orderNumber,
+      order.sourcingCost || 0,
+      order.shippingCost || 0,
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...csvData.map((row) => row.map((cell) => `"${cell}"`).join(",")),
+    ].join("\n");
+
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "orders_template.csv";
+    a.download = `orders_cost_update_template_${
+      new Date().toISOString().split("T")[0]
+    }.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
-    toast.success("Template downloaded");
+    toast.success("Downloaded cost update template with existing orders");
   };
 
   const exportOrdersToCSV = (ordersToExport, filename) => {
@@ -1079,7 +1083,7 @@ export default function OrdersPage() {
                 {/* NEW: Download Template Button */}
                 <Button variant="outline" onClick={handleDownloadTemplate}>
                   <FileSpreadsheet className="mr-2 h-4 w-4" />
-                  Download Template
+                  Download Update Template
                 </Button>
                 <div className="flex items-center gap-2">
                   <label className="flex items-center gap-2 text-sm">
@@ -1508,7 +1512,7 @@ export default function OrdersPage() {
                 uploadProgress.status === "validating") &&
                 "Please wait while we process your file..."}
               {uploadProgress.status === "complete" &&
-                "Your orders have been imported."}
+                "Your orders have been processed."}
               {uploadProgress.status === "error" &&
                 "An error occurred during upload."}
             </DialogDescription>
@@ -1568,7 +1572,7 @@ export default function OrdersPage() {
                     <p className="text-2xl font-bold">{uploadProgress.total}</p>
                   </div>
                   <div className="rounded-lg border bg-green-50 p-3">
-                    <p className="text-sm text-green-700">Imported</p>
+                    <p className="text-sm text-green-700">Imported/Updated</p>
                     <p className="text-2xl font-bold text-green-600">
                       {uploadProgress.imported}
                     </p>

@@ -28,6 +28,17 @@ function detectReportType(headers) {
     return "EXPORTED";
   }
 
+  // DETECT COST UPDATE TEMPLATE
+  if (
+    (normalizedHeaders.includes("order #") ||
+      normalizedHeaders.includes("order number")) &&
+    normalizedHeaders.includes("sourcing cost") &&
+    normalizedHeaders.includes("shipping cost") &&
+    !normalizedHeaders.includes("gross profit") // Distinguish from full export
+  ) {
+    return "COST_UPDATE";
+  }
+
   // eBay UK report
   if (normalizedHeaders.includes("regulatory operating fee")) {
     return "UK";
@@ -194,7 +205,135 @@ export async function POST(request) {
     const fileHash = generateFileHash(cleanedText);
     console.log("File hash:", fileHash);
 
-    // Check if this exact file has been uploaded before
+    const parsed = Papa.parse(cleanedText, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (header) => header.trim(),
+      delimiter: delimiter, // Use detected delimiter
+      dynamicTyping: false,
+      newline: "\n",
+      quoteChar: '"',
+      escapeChar: '"',
+    });
+
+    console.log("CSV parsed:", parsed.data.length, "rows");
+    const headers = Object.keys(parsed.data[0] || {});
+    if (parsed.data.length > 0) {
+      console.log("CSV Headers:", headers);
+    }
+
+    // Validate CSV is not empty
+    if (parsed.data.length === 0) {
+      return NextResponse.json(
+        {
+          error: "CSV file is empty. Please upload a file with order data.",
+          validationError: true,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate CSV has headers
+    if (headers.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "CSV file has no headers. Please ensure your CSV has column headers in the first row.",
+          validationError: true,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Detect report type for proper fee calculation
+    const reportType = detectReportType(headers);
+    console.log("Detected report type:", reportType);
+
+    // --- HANDLE COST UPDATE UPLOAD ---
+    if (reportType === "COST_UPDATE") {
+      const updates = [];
+      const errors = [];
+
+      for (let i = 0; i < parsed.data.length; i++) {
+        const row = parsed.data[i];
+        const orderNumber = row["Order #"] || row["Order Number"];
+
+        if (!orderNumber) {
+          continue; // Skip rows without order number
+        }
+
+        const sourcingCost = parseFloat(row["Sourcing Cost"] || "0");
+        const shippingCost = parseFloat(row["Shipping Cost"] || "0");
+
+        if (isNaN(sourcingCost) || isNaN(shippingCost)) {
+          errors.push({ row: i + 2, error: "Invalid cost format", data: row });
+          continue;
+        }
+
+        // Use updateOne with aggregation pipeline to recalculate grossProfit atomically
+        updates.push({
+          updateOne: {
+            filter: {
+              orderNumber: orderNumber,
+              adminId: adminId,
+              accountId: accountId,
+            },
+            update: [
+              {
+                $set: {
+                  sourcingCost: sourcingCost,
+                  shippingCost: shippingCost,
+                },
+              },
+              {
+                $set: {
+                  grossProfit: {
+                    $subtract: [
+                      "$grossAmount",
+                      { $add: ["$fees", sourcingCost, shippingCost] },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        });
+      }
+
+      if (updates.length > 0) {
+        try {
+          const result = await EbayOrder.bulkWrite(updates);
+          return NextResponse.json(
+            {
+              message: `Updated costs for ${result.modifiedCount} orders successfully!`,
+              imported: result.modifiedCount,
+              errors: errors.length,
+              errorDetails: errors,
+              success: true,
+            },
+            { status: 200 }
+          );
+        } catch (error) {
+          console.error("Bulk update error:", error);
+          return NextResponse.json(
+            {
+              error: "Failed to update orders",
+              technicalDetails: error.message,
+            },
+            { status: 500 }
+          );
+        }
+      } else {
+        return NextResponse.json(
+          { error: "No valid rows found to update", validationError: true },
+          { status: 400 }
+        );
+      }
+    }
+
+    // --- EXISTING LOGIC FOR STANDARD UPLOADS (REMAINING CODE) ---
+
+    // Check if this exact file has been uploaded before (only for new uploads, not updates)
     const existingOrdersWithHash = await EbayOrder.countDocuments({
       adminId,
       accountId,
@@ -243,50 +382,6 @@ export async function POST(request) {
       );
     }
 
-    const parsed = Papa.parse(cleanedText, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: (header) => header.trim(),
-      delimiter: delimiter, // Use detected delimiter
-      dynamicTyping: false,
-      newline: "\n",
-      quoteChar: '"',
-      escapeChar: '"',
-    });
-
-    console.log("CSV parsed:", parsed.data.length, "rows");
-    const headers = Object.keys(parsed.data[0] || {});
-    if (parsed.data.length > 0) {
-      console.log("CSV Headers:", headers);
-      console.log(
-        "First row sample:",
-        JSON.stringify(parsed.data[0]).substring(0, 500)
-      );
-    }
-
-    // Validate CSV is not empty
-    if (parsed.data.length === 0) {
-      return NextResponse.json(
-        {
-          error: "CSV file is empty. Please upload a file with order data.",
-          validationError: true,
-        },
-        { status: 400 }
-      );
-    }
-
-    // Validate CSV has headers
-    if (headers.length === 0) {
-      return NextResponse.json(
-        {
-          error:
-            "CSV file has no headers. Please ensure your CSV has column headers in the first row.",
-          validationError: true,
-        },
-        { status: 400 }
-      );
-    }
-
     // Only fail on critical parsing errors, not field mismatches
     const criticalErrors = parsed.errors.filter(
       (e) => e.type !== "FieldMismatch" && e.code !== "TooManyFields"
@@ -314,9 +409,6 @@ export async function POST(request) {
       );
     }
 
-    // Detect report type for proper fee calculation
-    const reportType = detectReportType(headers);
-    console.log("Detected report type:", reportType);
     console.log("CSV Headers detected:", headers.join(", "));
 
     const ordersToInsert = [];
