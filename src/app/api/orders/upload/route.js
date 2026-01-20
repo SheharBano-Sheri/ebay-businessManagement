@@ -51,11 +51,11 @@ function detectReportType(headers) {
   return "EBAY_REPORT";
 }
 
-// Helper: Parse fees from a row (Summing specific columns)
+// Helper: Parse fees from a row (Summing specific columns AB-AG)
 function sumFeeColumns(row) {
   const feeColumns = [
     "Final value fee - fixed",
-    "Final value fee – fixed", // Handle different dash types
+    "Final value fee – fixed", // Handle en-dash
     "Final value fee - variable",
     "Final value fee – variable",
     "Regulatory operating fee",
@@ -67,7 +67,9 @@ function sumFeeColumns(row) {
   let total = 0;
   feeColumns.forEach((col) => {
     const val = getValue(row, col);
-    if (val) total += parseFloat(val) || 0;
+    if (val && val !== "--") {
+      total += parseFloat(val) || 0;
+    }
   });
   return total;
 }
@@ -80,7 +82,7 @@ function parseDate(dateStr) {
 
   // Try multiple date formats
   const formats = [
-    // DD-MMM-YY (e.g., 30-Dec-25) - Common in eBay UK reports
+    // DD-MMM-YY (e.g., 18-Dec-25) - Common in eBay UK reports
     { regex: /^(\d{1,2})[-/ ]([A-Za-z]{3})[-/ ](\d{2,4})$/, order: "DMMonY" },
     // MM/DD/YYYY or M/D/YYYY
     { regex: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, order: "MDY" },
@@ -173,7 +175,7 @@ export async function POST(request) {
     if (!accountId) {
       return NextResponse.json(
         { error: "Please select an account first" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -210,18 +212,11 @@ export async function POST(request) {
           error: "CSV file is empty or could not be parsed.",
           validationError: true,
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const headers = Object.keys(parsed.data[0] || {});
-    if (headers.length < 2) {
-      console.warn(
-        "Possible delimiter detection failure. Headers found:",
-        headers
-      );
-    }
-
     const reportType = detectReportType(headers);
     console.log("Detected report type:", reportType);
 
@@ -285,7 +280,7 @@ export async function POST(request) {
               errorDetails: errors,
               success: true,
             },
-            { status: 200 }
+            { status: 200 },
           );
         } catch (error) {
           console.error("Bulk update error:", error);
@@ -294,13 +289,13 @@ export async function POST(request) {
               error: "Failed to update orders",
               technicalDetails: error.message,
             },
-            { status: 500 }
+            { status: 500 },
           );
         }
       } else {
         return NextResponse.json(
           { error: "No valid rows found to update", validationError: true },
-          { status: 400 }
+          { status: 400 },
         );
       }
     }
@@ -358,7 +353,7 @@ export async function POST(request) {
         orderNumber =
           getValue(row, "Order number") || getValue(row, "Order Number");
 
-        // Skip rows that don't have a valid order number (prevents Payout linking to random orders)
+        // Skip rows that don't have a valid order number
         if (!orderNumber || orderNumber === "--" || orderNumber.trim() === "") {
           continue;
         }
@@ -404,10 +399,6 @@ export async function POST(request) {
           getValue(mainRow, "Item Title") ||
           "Untitled Item";
         const quantity = getValue(mainRow, "Quantity") || "1";
-        const currency =
-          getValue(mainRow, "Transaction currency") ||
-          account.defaultCurrency ||
-          "USD";
         const orderDateStr =
           getValue(mainRow, "Transaction creation date") ||
           getValue(mainRow, "Date");
@@ -433,16 +424,16 @@ export async function POST(request) {
             totalGross += parseFloat(getValue(r, "Gross Amount") || "0");
             totalFees += parseFloat(getValue(r, "Fees") || "0");
             totalSourcingCost += parseFloat(
-              getValue(r, "Sourcing Cost") || "0"
+              getValue(r, "Sourcing Cost") || "0",
             );
             totalShippingCost += parseFloat(
-              getValue(r, "Shipping Cost") || "0"
+              getValue(r, "Shipping Cost") || "0",
             );
           });
           totalNet =
             totalGross - totalFees - totalSourcingCost - totalShippingCost;
         } else {
-          // --- NEW CALCULATION LOGIC AS REQUESTED ---
+          // --- NEW CALCULATION LOGIC ---
 
           // 1. Get Exchange Rate from "Order" row
           const exchangeRateStr = getValue(mainRow, "Exchange rate");
@@ -458,31 +449,32 @@ export async function POST(request) {
           const rawGrossAmount = parseFloat(
             getValue(mainRow, "Gross transaction amount") ||
               getValue(mainRow, "Gross Amount") ||
-              "0"
+              "0",
           );
           totalGross = rawGrossAmount * exchangeRate;
 
           // 3. Fee Calculation
-          // Formula: (Sum of fee columns in Order Row + Gross Amount of "Other fee" rows) * Exchange Rate
 
-          let feesInNativeCurrency = 0;
+          // A) Sum fee columns from the Order Row (AB-AG)
+          const orderFeesNative = sumFeeColumns(mainRow);
+          // Convert Order Fees to Payout Currency
+          const orderFeesConverted = orderFeesNative * exchangeRate;
 
-          // A) Sum fee columns from the Order Row
-          feesInNativeCurrency += sumFeeColumns(mainRow);
-
-          // B) Add "Gross transaction amount" from "Other fee" rows (e.g. Promoted Listings)
+          // B) Add "Other fee" rows (e.g. Promoted Listings)
+          // For Other Fee rows, "Net amount" (Col K) is already in Payout Currency
+          // (In Intl: Net is GBP, Gross is USD. In Domestic: Net is GBP, Gross is GBP)
+          let otherFeesTotal = 0;
           rows.forEach((r) => {
             const rType = (getValue(r, "Type") || "").trim().toLowerCase();
             if (rType === "other fee") {
-              feesInNativeCurrency += parseFloat(
-                getValue(r, "Gross transaction amount") || "0"
-              );
+              otherFeesTotal += parseFloat(getValue(r, "Net amount") || "0");
             }
           });
 
-          // Convert to Payout Currency and make absolute (Fees are usually negative in CSV)
-          const convertedFees = feesInNativeCurrency * exchangeRate;
-          totalFees = Math.abs(convertedFees);
+          // Calculate Total Fees (Absolute Value)
+          // Fees in CSV are negative. We sum them up and take Abs for DB storage.
+          // Example: OrderFees(-23.68) + OtherFees(-9.24) = -32.92 -> 32.92
+          totalFees = Math.abs(orderFeesConverted + otherFeesTotal);
 
           // 4. Expenses (Sourcing / Shipping)
           rows.forEach((r) => {
@@ -492,12 +484,12 @@ export async function POST(request) {
               totalShippingCost += parseFloat(shipExp);
             }
             totalSourcingCost += parseFloat(
-              getValue(r, "Sourcing Cost") || "0"
+              getValue(r, "Sourcing Cost") || "0",
             );
           });
 
           // 5. Net Amount & Gross Profit
-          // Net Amount = Gross - Fees
+          // Net Amount = Gross - Fees (Since totalFees is positive, we subtract it)
           totalNet = totalGross - totalFees;
 
           // Gross Profit = Net - Sourcing - Shipping
@@ -525,7 +517,6 @@ export async function POST(request) {
           };
 
           // --- SOURCING COST LOOKUP ---
-          // Try to find matching product by SKU to update Sourcing Cost if not in CSV
           if (orderData.sku && orderData.sku !== "--") {
             const product = await Product.findOne({
               sku: orderData.sku,
@@ -574,10 +565,9 @@ export async function POST(request) {
         });
       } catch (e) {
         console.error("Insertion error:", e);
-        // If bulk insert fails, try to return useful error
         return NextResponse.json(
           { error: "Database insertion failed", technicalDetails: e.message },
-          { status: 500 }
+          { status: 500 },
         );
       }
     }
@@ -593,13 +583,13 @@ export async function POST(request) {
         errorDetails: errors,
         success: true,
       },
-      { status: 200 }
+      { status: 200 },
     );
   } catch (error) {
     console.error("Upload CSV error:", error);
     return NextResponse.json(
       { error: "Internal server error", technicalDetails: error.message },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
