@@ -144,6 +144,11 @@ function parseDate(dateStr) {
   return isNaN(date.getTime()) ? null : date;
 }
 
+// Helper to format month key YYYY-MM
+function getMonthKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
@@ -328,19 +333,40 @@ export async function POST(request) {
     const errors = [];
     const orderNumbersToReplace = new Set();
 
-    // --- FIRST PASS: GROUPING ---
+    // Data structures for aggregation
+    // We will combine actual "Insertion fees" and "eBay collected tax" into this single object
+    const monthlyInsertionFees = {};
+
+    // --- FIRST PASS: GROUPING & PRE-FILTERING ---
     for (let i = 0; i < parsed.data.length; i++) {
       const row = parsed.data[i];
 
-      // Strict Check: Ignore Payout rows to prevent incorrect linking
       const rowType = (
         getValue(row, "Type") ||
         getValue(row, "Transaction type") ||
         ""
       ).trim();
 
+      // Strict Check: Ignore Payout rows
       if (rowType.toLowerCase() === "payout") {
-        continue; // Skip payouts entirely
+        continue;
+      }
+
+      // --- HANDLE INDIVIDUAL INSERTION FEE ROWS ---
+      if (rowType.toLowerCase() === "insertion fee") {
+        const dateStr =
+          getValue(row, "Date") || getValue(row, "Transaction creation date");
+        const date = parseDate(dateStr);
+        if (date) {
+          const monthKey = getMonthKey(date);
+          // Fee amounts are usually negative in CSV, we want positive cost
+          const amount = parseFloat(
+            getValue(row, "Amount") || getValue(row, "Net amount") || "0",
+          );
+          monthlyInsertionFees[monthKey] =
+            (monthlyInsertionFees[monthKey] || 0) + Math.abs(amount);
+        }
+        continue; // Don't add to order groups
       }
 
       let orderNumber;
@@ -413,6 +439,19 @@ export async function POST(request) {
           continue;
         }
 
+        // --- AGGREGATE TAX AS INSERTION FEE ---
+        // Requirement: "even eBay collected tax is considered to be Insertion fee"
+        const taxVal = parseFloat(
+          getValue(mainRow, "eBay collected tax") || "0",
+        );
+        if (taxVal && taxVal !== 0) {
+          const monthKey = getMonthKey(orderDate);
+          // Tax is usually positive in column Z? or negative?
+          // We take Abs to be safe and treat it as a cost
+          monthlyInsertionFees[monthKey] =
+            (monthlyInsertionFees[monthKey] || 0) + Math.abs(taxVal);
+        }
+
         let totalGross = 0;
         let totalFees = 0;
         let totalNet = 0;
@@ -461,8 +500,6 @@ export async function POST(request) {
           const orderFeesConverted = orderFeesNative * exchangeRate;
 
           // B) Add "Other fee" rows (e.g. Promoted Listings)
-          // For Other Fee rows, "Net amount" (Col K) is already in Payout Currency
-          // (In Intl: Net is GBP, Gross is USD. In Domestic: Net is GBP, Gross is GBP)
           let otherFeesTotal = 0;
           rows.forEach((r) => {
             const rType = (getValue(r, "Type") || "").trim().toLowerCase();
@@ -472,13 +509,10 @@ export async function POST(request) {
           });
 
           // Calculate Total Fees (Absolute Value)
-          // Fees in CSV are negative. We sum them up and take Abs for DB storage.
-          // Example: OrderFees(-23.68) + OtherFees(-9.24) = -32.92 -> 32.92
           totalFees = Math.abs(orderFeesConverted + otherFeesTotal);
 
           // 4. Expenses (Sourcing / Shipping)
           rows.forEach((r) => {
-            // Only add explicitly marked Expenses (rare in standard eBay reports)
             const shipExp = getValue(r, "Shipping Cost (Expense)");
             if (shipExp) {
               totalShippingCost += parseFloat(shipExp);
@@ -489,10 +523,7 @@ export async function POST(request) {
           });
 
           // 5. Net Amount & Gross Profit
-          // Net Amount = Gross - Fees (Since totalFees is positive, we subtract it)
           totalNet = totalGross - totalFees;
-
-          // Gross Profit = Net - Sourcing - Shipping
           const grossProfit = totalNet - totalSourcingCost - totalShippingCost;
 
           const orderData = {
@@ -544,6 +575,41 @@ export async function POST(request) {
           row: (rows[0]?.originalIndex || 0) + 2,
           error: err.message,
           data: rows[0],
+        });
+      }
+    }
+
+    // --- CREATE SUMMARY ORDERS FOR INSERTION FEES (Combined with TAX) ---
+    const allMonths = Object.keys(monthlyInsertionFees);
+
+    // Generate unique suffix to avoid collision
+    const fileHashSuffix = fileHash.substring(0, 8);
+
+    for (const month of allMonths) {
+      if (monthlyInsertionFees[month] && monthlyInsertionFees[month] > 0) {
+        const [year, m] = month.split("-");
+        const summaryDate = new Date(parseInt(year), parseInt(m) - 1, 1); // 1st of month
+
+        ordersToInsert.push({
+          adminId,
+          accountId,
+          uploadedBy: user._id,
+          fileHash,
+          orderNumber: `Insertion-Fees-${month}`,
+          sku: "MONTHLY-INSERTION-FEE",
+          itemName: `Monthly Insertion Fees (Includes Tax) - ${month}`,
+          orderedQty: 1,
+          transactionType: "Insertion Fees",
+          grossAmount: monthlyInsertionFees[month],
+          fees: 0,
+          netAmount: monthlyInsertionFees[month],
+          grossProfit: monthlyInsertionFees[month],
+          currency: account.defaultCurrency || "GBP",
+          orderDate: summaryDate,
+          sourcingCost: 0,
+          shippingCost: 0,
+          description:
+            "Aggregated insertion fees and eBay collected tax from CSV upload",
         });
       }
     }
