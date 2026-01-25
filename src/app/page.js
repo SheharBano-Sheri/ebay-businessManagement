@@ -18,7 +18,7 @@ const FEATURES = [
     number: 1,
     title: "Manage Inventory",
     description: "Real-time inventory tracking across all channels and warehouses. Keep stock levels synchronized automatically.",
-    image: "/hero/image.png",
+    image: "/hero/image3.png",
   },
   {
     id: "tab-2",
