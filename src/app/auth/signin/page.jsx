@@ -5,26 +5,34 @@ import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { Package, Clock } from "lucide-react";
+import { Package, Clock, Eye, EyeOff } from "lucide-react";
 
 function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [pendingApproval, setPendingApproval] = useState(false);
+  const [showPassword, setShowPassword] = useState(false); // New state for password visibility
   const [formData, setFormData] = useState({
     email: "",
-    password: ""
+    password: "",
   });
 
   useEffect(() => {
-    const isPending = searchParams.get('pending');
-    if (isPending === 'true') {
+    const isPending = searchParams.get("pending");
+    if (isPending === "true") {
       setPendingApproval(true);
     }
   }, [searchParams]);
@@ -32,7 +40,7 @@ function SignInForm() {
   const handleChange = (e) => {
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [e.target.name]: e.target.value,
     });
   };
 
@@ -42,20 +50,20 @@ function SignInForm() {
 
     try {
       // Get IP and user agent from server
-      const metadataResponse = await fetch('/api/auth/signin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: formData.email })
+      const metadataResponse = await fetch("/api/auth/signin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: formData.email }),
       });
-      
+
       const metadata = await metadataResponse.json();
-      
+
       const result = await signIn("credentials", {
         email: formData.email,
         password: formData.password,
         ipAddress: metadata.ipAddress,
         userAgent: metadata.userAgent,
-        redirect: false
+        redirect: false,
       });
 
       if (result?.error) {
@@ -89,7 +97,9 @@ function SignInForm() {
             <Alert className="mb-6 border-yellow-200 bg-yellow-50">
               <Clock className="h-4 w-4 text-yellow-600" />
               <AlertDescription className="text-yellow-800">
-                Your vendor account is pending approval by the administrator. You will be able to sign in once approved. Please check back soon.
+                Your vendor account is pending approval by the administrator.
+                You will be able to sign in once approved. Please check back
+                soon.
               </AlertDescription>
             </Alert>
           )}
@@ -109,15 +119,30 @@ function SignInForm() {
 
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="••••••••"
-                value={formData.password}
-                onChange={handleChange}
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
+                  className="pr-10" // Add padding to prevent text overlapping the icon
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>
@@ -129,7 +154,10 @@ function SignInForm() {
           <div className="text-center w-full">
             <p className="text-sm text-muted-foreground">
               Don't have an account?{" "}
-              <Link href="/auth/signup" className="text-primary hover:underline">
+              <Link
+                href="/auth/signup"
+                className="text-primary hover:underline"
+              >
                 Sign up
               </Link>
             </p>
@@ -142,11 +170,13 @@ function SignInForm() {
 
 export default function SignInPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        </div>
+      }
+    >
       <SignInForm />
     </Suspense>
   );
