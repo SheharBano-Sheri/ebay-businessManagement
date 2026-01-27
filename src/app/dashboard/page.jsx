@@ -10,7 +10,13 @@ import { SectionCards } from "@/components/section-cards";
 import { SiteHeader } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { PieChartsBreakdown } from "@/components/pie-charts-breakdown";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -20,9 +26,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DollarSign, TrendingUp, Package, ShoppingCart, Users } from "lucide-react";
-
-import data from "./data.json";
+import {
+  DollarSign,
+  TrendingUp,
+  Package,
+  ShoppingCart,
+  Users,
+} from "lucide-react";
 
 export default function Page() {
   const { data: session, status } = useSession();
@@ -30,9 +40,13 @@ export default function Page() {
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [accounts, setAccounts] = useState([]);
-  const [exchangeRates, setExchangeRates] = useState({ USD: 1, GBP: 0.79, EUR: 0.92 });
+  const [exchangeRates, setExchangeRates] = useState({
+    USD: 1,
+    GBP: 0.79,
+    EUR: 0.92,
+  });
   const [vendorNotification, setVendorNotification] = useState(null);
-  
+
   // Filter states
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -45,12 +59,20 @@ export default function Page() {
     }
   }, [status, router]);
 
+  // AUTO-SYNC DASHBOARD CURRENCY WITH ACCOUNT SETTINGS
+  // This matches the behavior on your Order page where the default is picked from the account
+  useEffect(() => {
+    if (analytics?.defaultDisplayCurrency) {
+      setCurrency(analytics.defaultDisplayCurrency);
+    }
+  }, [analytics]);
+
   useEffect(() => {
     if (status === "authenticated") {
       fetchAccounts();
       fetchExchangeRates();
       fetchAnalytics();
-      if (session?.user?.role === 'public_vendor') {
+      if (session?.user?.role === "public_vendor") {
         fetchVendorNotifications();
       }
     }
@@ -70,8 +92,9 @@ export default function Page() {
 
   const fetchExchangeRates = async () => {
     try {
-      // Using exchangerate-api.com free tier
-      const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+      const response = await fetch(
+        "https://api.exchangerate-api.com/v4/latest/USD",
+      );
       const data = await response.json();
       if (data.rates) {
         setExchangeRates({
@@ -80,7 +103,7 @@ export default function Page() {
           EUR: data.rates.EUR,
           CAD: data.rates.CAD,
           AUD: data.rates.AUD,
-          JPY: data.rates.JPY
+          JPY: data.rates.JPY,
         });
       }
     } catch (error) {
@@ -89,15 +112,16 @@ export default function Page() {
   };
 
   const fetchAnalytics = async () => {
+    setLoading(true);
     try {
       let url = "/api/analytics?";
       if (startDate) url += `startDate=${startDate}&`;
       if (endDate) url += `endDate=${endDate}&`;
       if (selectedAccount !== "all") url += `account=${selectedAccount}`;
-      
+
       const response = await fetch(url);
       const data = await response.json();
-      
+
       if (response.ok) {
         setAnalytics(data);
       }
@@ -121,7 +145,13 @@ export default function Page() {
   };
 
   const formatCurrency = (amount) => {
-    const convertedAmount = (amount || 0) * (exchangeRates[currency] || 1);
+    // Logic: If the selected dashboard currency is the same as the data's native currency,
+    // we show the raw amount. Otherwise, we convert using exchange rates.
+    const isNative = analytics?.defaultDisplayCurrency === currency;
+    const convertedAmount = isNative
+      ? amount || 0
+      : (amount || 0) * (exchangeRates[currency] || 1);
+
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: currency,
@@ -153,13 +183,15 @@ export default function Page() {
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
-              
-              {/* Vendor Notification Banner */}
               {vendorNotification && (
                 <Alert className="bg-primary/10 border-primary/20">
                   <Users className="h-4 w-4" />
                   <AlertDescription>
-                    <strong>{vendorNotification.followerCount}</strong> {vendorNotification.followerCount === 1 ? 'user has' : 'users have'} added you as a vendor!
+                    <strong>{vendorNotification.followerCount}</strong>{" "}
+                    {vendorNotification.followerCount === 1
+                      ? "user has"
+                      : "users have"}{" "}
+                    added you as a vendor!
                   </AlertDescription>
                 </Alert>
               )}
@@ -183,8 +215,11 @@ export default function Page() {
                         className="w-40"
                       />
                     </div>
-                    
-                    <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+
+                    <Select
+                      value={selectedAccount}
+                      onValueChange={setSelectedAccount}
+                    >
                       <SelectTrigger className="w-[200px]">
                         <SelectValue placeholder="Select account" />
                       </SelectTrigger>
@@ -214,7 +249,10 @@ export default function Page() {
                   </div>
 
                   <div className="text-sm text-muted-foreground">
-                    Reporting in: <span className="font-semibold text-foreground">{currency}</span>
+                    Reporting in:{" "}
+                    <span className="font-semibold text-foreground">
+                      {currency}
+                    </span>
                   </div>
                 </div>
               </Card>
@@ -230,7 +268,9 @@ export default function Page() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
-                      {loading ? "..." : formatCurrency(analytics?.grossRevenue)}
+                      {loading
+                        ? "..."
+                        : formatCurrency(analytics?.grossRevenue)}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Total sales revenue
@@ -264,7 +304,9 @@ export default function Page() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
-                      {loading ? "..." : formatCurrency(analytics?.inventoryValue)}
+                      {loading
+                        ? "..."
+                        : formatCurrency(analytics?.inventoryValue)}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {analytics?.totalStock || 0} items in stock
@@ -290,50 +332,79 @@ export default function Page() {
                 </Card>
               </div>
 
-              {/* Charts */}
               <PieChartsBreakdown analytics={analytics} loading={loading} />
-              
-              {/* Recent Orders Table */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Activity</CardTitle>
-                  <CardDescription>
-                    Latest orders from {selectedAccount === 'all' ? 'all accounts' : accounts.find(a => a._id === selectedAccount)?.accountName || 'selected account'}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <p className="text-muted-foreground">Loading recent orders...</p>
-                    </div>
-                  ) : analytics?.recentOrders && analytics.recentOrders.length > 0 ? (
-                    <div className="space-y-2">
-                      {analytics.recentOrders.map((order, idx) => (
-                        <div key={idx} className="flex items-center justify-between border-b pb-2">
-                          <div className="flex-1">
-                            <p className="font-medium">{order.itemName}</p>
-                            <p className="text-sm text-muted-foreground">Order: {order.orderNumber}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-medium">{formatCurrency(order.grossAmount)}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(order.orderDate).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center py-8">
-                      <p className="text-muted-foreground">No orders yet. Upload CSV to get started!</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+
+              <RecentOrdersTable
+                loading={loading}
+                analytics={analytics}
+                selectedAccount={selectedAccount}
+                accounts={accounts}
+                formatCurrency={formatCurrency}
+              />
             </div>
           </div>
         </div>
       </SidebarInset>
     </SidebarProvider>
+  );
+}
+
+function RecentOrdersTable({
+  loading,
+  analytics,
+  selectedAccount,
+  accounts,
+  formatCurrency,
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Recent Activity</CardTitle>
+        <CardDescription>
+          Latest orders from{" "}
+          {selectedAccount === "all"
+            ? "all accounts"
+            : accounts.find((a) => a._id === selectedAccount)?.accountName ||
+              "selected account"}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <p className="text-muted-foreground">Loading recent orders...</p>
+          </div>
+        ) : analytics?.recentOrders && analytics.recentOrders.length > 0 ? (
+          <div className="space-y-2">
+            {analytics.recentOrders.map((order, idx) => (
+              <div
+                key={idx}
+                className="flex items-center justify-between border-b pb-2"
+              >
+                <div className="flex-1">
+                  <p className="font-medium">{order.itemName}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Order: {order.orderNumber}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium">
+                    {formatCurrency(order.grossAmount)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(order.orderDate).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex items-center justify-center py-8">
+            <p className="text-muted-foreground">
+              No orders yet. Upload CSV to get started!
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
