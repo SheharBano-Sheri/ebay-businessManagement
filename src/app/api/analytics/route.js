@@ -124,6 +124,7 @@ export async function GET(request) {
       // Standalone fees handling
       if (
         transactionType === "insertion fee" ||
+        transactionType === "insertion fees" ||
         transactionType === "listing fee"
       ) {
         const feeAmount = Math.abs(t.fees || t.netAmount || t.grossAmount || 0);
