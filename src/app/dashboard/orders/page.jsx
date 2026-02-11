@@ -206,7 +206,7 @@ export default function OrdersPage() {
     // Optimistic UI update
     const previousPurchases = [...vendorPurchases];
     setVendorPurchases((prev) =>
-      prev.map((p) => (p._id === orderId ? { ...p, status: newStatus } : p))
+      prev.map((p) => (p._id === orderId ? { ...p, status: newStatus } : p)),
     );
 
     try {
@@ -316,8 +316,8 @@ export default function OrdersPage() {
               <td>${order.productSnapshot?.sku || "-"}</td>
               <td class="text-right">${order.quantity}</td>
               <td class="text-right">${currency} ${(
-      order.productSnapshot?.unitCost || 0
-    ).toFixed(2)}</td>
+                order.productSnapshot?.unitCost || 0
+              ).toFixed(2)}</td>
               <td class="text-right">${currency} ${total}</td>
             </tr>
           </tbody>
@@ -384,11 +384,11 @@ export default function OrdersPage() {
 
         if (startDate && endDate) {
           toast.info(
-            `Replace mode: Will delete existing orders from ${startDate} to ${endDate}`
+            `Replace mode: Will delete existing orders from ${startDate} to ${endDate}`,
           );
         } else {
           toast.warning(
-            "Replace mode: Will delete ALL existing orders for this account!"
+            "Replace mode: Will delete ALL existing orders for this account!",
           );
         }
       }
@@ -452,12 +452,12 @@ export default function OrdersPage() {
 
           if (data.imported > 0) {
             toast.success(
-              data.message || `Imported ${data.imported} orders successfully!`
+              data.message || `Imported ${data.imported} orders successfully!`,
             );
           }
           if (data.errors > 0) {
             toast.warning(
-              `${data.errors} rows had errors. Check the upload dialog for details.`
+              `${data.errors} rows had errors. Check the upload dialog for details.`,
             );
           }
           fetchOrders();
@@ -470,9 +470,9 @@ export default function OrdersPage() {
           if (data.missingColumns) {
             toast.error(
               `CSV validation failed: Missing columns - ${data.missingColumns.join(
-                ", "
+                ", ",
               )}`,
-              { duration: 8000 }
+              { duration: 8000 },
             );
           } else if (data.validationError) {
             toast.error(errorMessage, { duration: 6000 });
@@ -531,7 +531,7 @@ export default function OrdersPage() {
         setAbortController(null);
       }
     },
-    [selectedAccount, accounts, replaceMode, startDate, endDate, fetchOrders]
+    [selectedAccount, accounts, replaceMode, startDate, endDate, fetchOrders],
   );
 
   const handleCancelUpload = useCallback(() => {
@@ -548,7 +548,7 @@ export default function OrdersPage() {
         currency: currency,
       }).format(amount);
     },
-    [currency]
+    [currency],
   );
 
   const handleCellEdit = useCallback(async (orderId, field, value) => {
@@ -563,8 +563,8 @@ export default function OrdersPage() {
       if (response.ok) {
         setOrders((prevOrders) =>
           prevOrders.map((order) =>
-            order._id === orderId ? { ...order, [field]: parsedValue } : order
-          )
+            order._id === orderId ? { ...order, [field]: parsedValue } : order,
+          ),
         );
         toast.success("Order updated successfully");
       } else {
@@ -583,7 +583,7 @@ export default function OrdersPage() {
       (order) =>
         order.orderNumber.toLowerCase().includes(searchLower) ||
         order.sku.toLowerCase().includes(searchLower) ||
-        order.itemName.toLowerCase().includes(searchLower)
+        order.itemName.toLowerCase().includes(searchLower),
     );
   }, [orders, searchTerm]);
 
@@ -603,7 +603,7 @@ export default function OrdersPage() {
         setTimeout(() => setIsExporting(false), 1000);
       }
     },
-    [filteredOrders, isExporting]
+    [filteredOrders, isExporting],
   );
 
   const handleExportDateRange = useCallback(
@@ -632,7 +632,7 @@ export default function OrdersPage() {
 
         exportOrdersToCSV(
           rangeOrders,
-          `${exportDateRange.start}_to_${exportDateRange.end}`
+          `${exportDateRange.start}_to_${exportDateRange.end}`,
         );
         setIsExportDialogOpen(false);
         toast.success(`Exported ${rangeOrders.length} orders`);
@@ -640,7 +640,7 @@ export default function OrdersPage() {
         setTimeout(() => setIsExporting(false), 1000);
       }
     },
-    [exportDateRange, isExporting, orders]
+    [exportDateRange, isExporting, orders],
   );
 
   // New function to download CSV template
@@ -877,13 +877,13 @@ export default function OrdersPage() {
                                   <span className="font-medium">
                                     {format(
                                       new Date(purchase.createdAt),
-                                      "MMM dd, yyyy"
+                                      "MMM dd, yyyy",
                                     )}
                                   </span>
                                   <span className="text-xs text-muted-foreground">
                                     {format(
                                       new Date(purchase.createdAt),
-                                      "HH:mm a"
+                                      "HH:mm a",
                                     )}
                                   </span>
                                   <span className="text-xs font-mono text-muted-foreground mt-1 bg-muted px-1.5 py-0.5 rounded w-fit">
@@ -971,10 +971,10 @@ export default function OrdersPage() {
                                       purchase.status === "completed"
                                         ? "border-green-200 bg-green-50 text-green-700"
                                         : purchase.status === "cancelled"
-                                        ? "border-red-200 bg-red-50 text-red-700"
-                                        : purchase.status === "processing"
-                                        ? "border-blue-200 bg-blue-50 text-blue-700"
-                                        : ""
+                                          ? "border-red-200 bg-red-50 text-red-700"
+                                          : purchase.status === "processing"
+                                            ? "border-blue-200 bg-blue-50 text-blue-700"
+                                            : ""
                                     }`}
                                   >
                                     <SelectValue />
@@ -1320,11 +1320,19 @@ export default function OrdersPage() {
                             </span>
                           </TableCell>
                           <TableCell className="text-right font-semibold border-r text-blue-600 dark:text-blue-400">
-                            {formatCurrency(order.grossAmount)}
+                            {formatCurrency(
+                              order.transactionType === "Insertion Fee"
+                                ? 0
+                                : order.grossAmount,
+                            )}
                           </TableCell>
                           <TableCell className="text-right border-r">
                             <span className="font-medium text-red-600 dark:text-red-400">
-                              {formatCurrency(Math.abs(order.fees))}
+                              {formatCurrency(
+                                order.transactionType === "Insertion Fee"
+                                  ? Math.abs(order.grossAmount)
+                                  : Math.abs(order.fees),
+                              )}
                             </span>
                           </TableCell>
                           <TableCell className="text-right border-r">
@@ -1337,7 +1345,7 @@ export default function OrdersPage() {
                                   handleCellEdit(
                                     order._id,
                                     "sourcingCost",
-                                    e.target.value
+                                    e.target.value,
                                   )
                                 }
                                 onKeyDown={(e) => {
@@ -1345,7 +1353,7 @@ export default function OrdersPage() {
                                     handleCellEdit(
                                       order._id,
                                       "sourcingCost",
-                                      e.target.value
+                                      e.target.value,
                                     );
                                   }
                                 }}
@@ -1374,7 +1382,7 @@ export default function OrdersPage() {
                                   handleCellEdit(
                                     order._id,
                                     "shippingCost",
-                                    e.target.value
+                                    e.target.value,
                                   )
                                 }
                                 onKeyDown={(e) => {
@@ -1382,7 +1390,7 @@ export default function OrdersPage() {
                                     handleCellEdit(
                                       order._id,
                                       "shippingCost",
-                                      e.target.value
+                                      e.target.value,
                                     );
                                   }
                                 }}
@@ -1407,7 +1415,7 @@ export default function OrdersPage() {
                                 order.grossAmount -
                                   Math.abs(order.fees) -
                                   order.sourcingCost -
-                                  order.shippingCost
+                                  order.shippingCost,
                               )}
                             </span>
                           </TableCell>
@@ -1442,9 +1450,13 @@ export default function OrdersPage() {
                     <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
                       {formatCurrency(
                         filteredOrders.reduce(
-                          (sum, o) => sum + o.grossAmount,
-                          0
-                        )
+                          (sum, o) =>
+                            sum +
+                            (o.transactionType === "Insertion Fee"
+                              ? 0
+                              : o.grossAmount),
+                          0,
+                        ),
                       )}
                     </p>
                   </div>
@@ -1455,9 +1467,13 @@ export default function OrdersPage() {
                     <p className="text-3xl font-bold text-red-600 dark:text-red-400">
                       {formatCurrency(
                         filteredOrders.reduce(
-                          (sum, o) => sum + Math.abs(o.fees),
-                          0
-                        )
+                          (sum, o) =>
+                            sum +
+                            (o.transactionType === "Insertion Fee"
+                              ? Math.abs(o.grossAmount)
+                              : Math.abs(o.fees)),
+                          0,
+                        ),
                       )}
                     </p>
                   </div>
@@ -1482,8 +1498,8 @@ export default function OrdersPage() {
                       {formatCurrency(
                         filteredOrders.reduce(
                           (sum, o) => sum + o.sourcingCost + o.shippingCost,
-                          0
-                        )
+                          0,
+                        ),
                       )}
                     </p>
                   </div>
@@ -1495,8 +1511,8 @@ export default function OrdersPage() {
                       {formatCurrency(
                         filteredOrders.reduce(
                           (sum, o) => sum + o.grossProfit,
-                          0
-                        )
+                          0,
+                        ),
                       )}
                     </p>
                   </div>
