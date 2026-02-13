@@ -413,3 +413,316 @@ If you didn't expect this invitation, you can safely ignore this email.
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Send email verification link to new user
+ * @param {Object} params - Email parameters
+ * @param {string} params.to - Recipient email
+ * @param {string} params.name - User's name
+ * @param {string} params.verificationToken - Verification token
+ * @returns {Promise<Object>} Email sending result
+ */
+export async function sendVerificationEmail({ to, name, verificationToken }) {
+  try {
+    // If no email service is configured, return success but log a warning
+    if (!process.env.RESEND_API_KEY && !process.env.EMAIL_HOST) {
+      console.warn('Email service not configured. Skipping verification email.');
+      return { success: true, skipped: true, message: 'Email service not configured' };
+    }
+
+    const senderEmail = process.env.EMAIL_USER || 'noreply@geniebms.com';
+    const senderName = process.env.APP_NAME || 'Genie Business Management System';
+    const appUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+    
+    const verificationLink = `${appUrl}/auth/verify-email?token=${verificationToken}`;
+    
+    // If Resend API key is configured, use Resend
+    if (process.env.RESEND_API_KEY) {
+      const { Resend } = require('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      const { data, error } = await resend.emails.send({
+        from: `${senderName} <${senderEmail}>`,
+        to,
+        subject: 'Please Verify Your Email Address',
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f4f4f4; margin: 0; padding: 0; }
+              .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+              .header { 
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                color: white; 
+                padding: 40px 30px; 
+                text-align: center; 
+              }
+              .header h1 { margin: 0; font-size: 28px; }
+              .content { padding: 40px 30px; }
+              .content h2 { color: #333; margin-top: 0; }
+              .button { 
+                display: inline-block; 
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                color: white !important; 
+                padding: 15px 40px; 
+                text-decoration: none; 
+                border-radius: 5px; 
+                margin: 25px 0; 
+                font-weight: bold;
+                text-align: center;
+              }
+              .button-container { text-align: center; }
+              .info-box { 
+                background: #f9f9f9; 
+                border-left: 4px solid #667eea; 
+                padding: 15px; 
+                margin: 20px 0; 
+                border-radius: 4px;
+              }
+              .footer { 
+                text-align: center; 
+                padding: 20px 30px; 
+                background: #f9f9f9; 
+                color: #666; 
+                font-size: 12px; 
+              }
+              .footer p { margin: 5px 0; }
+              .link-text { 
+                word-break: break-all; 
+                color: #667eea; 
+                font-size: 12px; 
+                margin-top: 20px;
+                padding: 10px;
+                background: #f9f9f9;
+                border-radius: 4px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>✉️ Verify Your Email</h1>
+              </div>
+              <div class="content">
+                <h2>Hi ${name},</h2>
+                
+                <p>Welcome to <strong>Genie Business Management System</strong>! We're excited to have you on board.</p>
+                
+                <p>To complete your registration and access your account, please verify your email address by clicking the button below:</p>
+                
+                <div class="button-container">
+                  <a href="${verificationLink}" class="button">
+                    Verify Email Address
+                  </a>
+                </div>
+                
+                <div class="info-box">
+                  <p><strong>⏰ Important:</strong> This verification link will expire in <strong>24 hours</strong>.</p>
+                  <p><strong>🔒 Security:</strong> This link can only be used once.</p>
+                </div>
+                
+                <p>If the button doesn't work, copy and paste this link into your browser:</p>
+                <div class="link-text">${verificationLink}</div>
+                
+                <p style="margin-top: 30px;">If you didn't create an account with us, please ignore this email.</p>
+              </div>
+              <div class="footer">
+                <p><strong>Need help?</strong> Contact our support team</p>
+                <p>&copy; ${new Date().getFullYear()} Genie Business Management System. All rights reserved.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `,
+        text: `
+Hi ${name},
+
+Welcome to Genie Business Management System! We're excited to have you on board.
+
+To complete your registration and access your account, please verify your email address by clicking the link below:
+
+${verificationLink}
+
+IMPORTANT:
+- This verification link will expire in 24 hours.
+- This link can only be used once.
+
+If you didn't create an account with us, please ignore this email.
+
+Need help? Contact our support team.
+
+(c) ${new Date().getFullYear()} Genie Business Management System. All rights reserved.
+        `,
+      });
+
+      if (error) {
+        console.error('Resend verification email error:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('Verification email sent successfully via Resend:', data?.id);
+      return { success: true, messageId: data?.id };
+    }
+
+    // Fallback to nodemailer if Resend not configured
+    if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+      console.warn('SMTP not fully configured. Skipping verification email.');
+      return { success: true, skipped: true, message: 'SMTP not configured' };
+    }
+
+    console.log('Using SMTP email configuration for verification:', {
+      host: process.env.EMAIL_HOST,
+      port: process.env.EMAIL_PORT,
+      user: process.env.EMAIL_USER,
+      hasPassword: !!process.env.EMAIL_PASSWORD
+    });
+
+    const nodemailer = require('nodemailer');
+    const transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST,
+      port: parseInt(process.env.EMAIL_PORT || '587'),
+      secure: false, // true for 465, false for other ports
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+      tls: {
+        rejectUnauthorized: false
+      },
+      debug: true, // Enable debug logs
+      logger: true // Log to console
+    });
+
+    // Verify connection
+    try {
+      await transporter.verify();
+      console.log('✅ SMTP server connection verified for verification email');
+    } catch (verifyError) {
+      console.error('❌ SMTP verification failed:', verifyError);
+      return { success: false, error: `SMTP connection failed: ${verifyError.message}` };
+    }
+
+    const mailOptions = {
+      from: `"${senderName}" <${senderEmail}>`,
+      to,
+      subject: 'Please Verify Your Email Address',
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f4f4f4; margin: 0; padding: 0; }
+            .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .header { 
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+              color: white; 
+              padding: 40px 30px; 
+              text-align: center; 
+            }
+            .header h1 { margin: 0; font-size: 28px; }
+            .content { padding: 40px 30px; }
+            .content h2 { color: #333; margin-top: 0; }
+            .button { 
+              display: inline-block; 
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+              color: white !important; 
+              padding: 15px 40px; 
+              text-decoration: none; 
+              border-radius: 5px; 
+              margin: 25px 0; 
+              font-weight: bold;
+              text-align: center;
+            }
+            .button-container { text-align: center; }
+            .info-box { 
+              background: #f9f9f9; 
+              border-left: 4px solid #667eea; 
+              padding: 15px; 
+              margin: 20px 0; 
+              border-radius: 4px;
+            }
+            .footer { 
+              text-align: center; 
+              padding: 20px 30px; 
+              background: #f9f9f9; 
+              color: #666; 
+              font-size: 12px; 
+            }
+            .footer p { margin: 5px 0; }
+            .link-text { 
+              word-break: break-all; 
+              color: #667eea; 
+              font-size: 12px; 
+              margin-top: 20px;
+              padding: 10px;
+              background: #f9f9f9;
+              border-radius: 4px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>✉️ Verify Your Email</h1>
+            </div>
+            <div class="content">
+              <h2>Hi ${name},</h2>
+              
+              <p>Welcome to <strong>Genie Business Management System</strong>! We're excited to have you on board.</p>
+              
+              <p>To complete your registration and access your account, please verify your email address by clicking the button below:</p>
+              
+              <div class="button-container">
+                <a href="${verificationLink}" class="button">
+                  Verify Email Address
+                </a>
+              </div>
+              
+              <div class="info-box">
+                <p><strong>⏰ Important:</strong> This verification link will expire in <strong>24 hours</strong>.</p>
+                <p><strong>🔒 Security:</strong> This link can only be used once.</p>
+              </div>
+              
+              <p>If the button doesn't work, copy and paste this link into your browser:</p>
+              <div class="link-text">${verificationLink}</div>
+              
+              <p style="margin-top: 30px;">If you didn't create an account with us, please ignore this email.</p>
+            </div>
+            <div class="footer">
+              <p><strong>Need help?</strong> Contact our support team</p>
+              <p>&copy; ${new Date().getFullYear()} Genie Business Management System. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+      text: `
+Hi ${name},
+
+Welcome to Genie Business Management System! We're excited to have you on board.
+
+To complete your registration and access your account, please verify your email address by clicking the link below:
+
+${verificationLink}
+
+IMPORTANT:
+- This verification link will expire in 24 hours.
+- This link can only be used once.
+
+If you didn't create an account with us, please ignore this email.
+
+Need help? Contact our support team.
+
+(c) ${new Date().getFullYear()} Genie Business Management System. All rights reserved.
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Verification email sent via SMTP:', info.messageId);
+    return { success: true, messageId: info.messageId };
+
+  } catch (error) {
+    console.error('Verification email failed:', error);
+    return { success: false, error: error.message };
+  }
+}

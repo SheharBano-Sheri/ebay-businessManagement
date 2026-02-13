@@ -5,6 +5,8 @@ import Vendor from '@/models/Vendor';
 import TeamMember from '@/models/TeamMember';
 import bcrypt from 'bcryptjs';
 import { validatePassword } from '@/lib/password-validation';
+import { generateVerificationToken, generateTokenExpiry } from '@/lib/verification';
+import { sendVerificationEmail } from '@/lib/email';
 
 export async function POST(request) {
   try {
@@ -115,11 +117,25 @@ export async function POST(request) {
     console.log('User Is Active:', userIsActive);
     console.log('==================');
 
+    // Generate email verification token for non-invited users
+    let verificationToken = null;
+    let verificationTokenExpiry = null;
+    
+    if (!invitation) {
+      verificationToken = generateVerificationToken();
+      verificationTokenExpiry = generateTokenExpiry();
+    }
+
     // Create user account
     const userData = {
       email,
       password: hashedPassword,
-      name,
+      name,, // Public vendors start pending
+      // Email verification fields (only for non-invited users)
+      isEmailVerified: invitation ? true : false, // Team invitations are pre-verified
+      emailVerificationToken: invitation ? null : verificationToken,
+      emailVerificationTokenExpiry: invitation ? null : verificationTokenExpiry,
+      emailVerificationTokenUsed: false
       accountType: invitation ? 'user' : (accountType || 'user'),
       role: invitation ? 'team_member' : (isPublicVendor ? 'public_vendor' : 'owner'),
       membershipPlan: invitation ? 'invited' : (membershipPlan || 'personal'),
@@ -149,7 +165,28 @@ export async function POST(request) {
 
     // If team invitation, activate it
     if (invitation) {
-      invitation.status = 'active';
+      iSend verification email for non-invited users
+    if (!invitation && verificationToken) {
+      try {
+        const emailResult = await sendVerificationEmail({
+          to: email,
+          name: name,
+          verificationToken: verificationToken
+        });
+        
+        if (!emailResult.success && !emailResult.skipped) {
+          console.error('Failed to send verification email:', emailResult.error);
+          // Don't fail the signup, just log the error
+        } else if (emailResult.success) {
+          console.log('Verification email sent successfully');
+        }
+      } catch (emailError) {
+        console.error('Error sending verification email:', emailError);
+        // Don't fail the signup, just log the error
+      }
+    }
+
+    // nvitation.status = 'active';
       invitation.acceptedAt = new Date();
       await invitation.save();
     }
@@ -173,6 +210,7 @@ export async function POST(request) {
       if (!masterAdmin) {
         // Rollback: delete the user we just created
         await User.findByIdAndDelete(user._id);
+        requiresEmailVerification: true, // Flag that email verification is required
         return NextResponse.json({ 
           error: 'Master admin not found. Please contact system administrator.' 
         }, { status: 500 });
@@ -209,7 +247,7 @@ export async function POST(request) {
     if (membershipPlan === 'enterprise' && !invitation) {
       return NextResponse.json({
         message: 'Account created successfully',
-        pendingApproval: true, // Flag that this plan is pending approval
+        requiresEmailVerification: true, // Flag that email verification is required
         user: {
           id: user._id,
           email: user.email,
@@ -222,6 +260,8 @@ export async function POST(request) {
     }
 
     return NextResponse.json({
+      message: 'Account created successfully',
+      requiresEmailVerification: !invitation, // Only require verification for non-invited users
       message: 'Account created successfully',
       user: {
         id: user._id,

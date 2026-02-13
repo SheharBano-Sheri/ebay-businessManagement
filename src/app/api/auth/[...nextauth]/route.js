@@ -55,6 +55,18 @@ export const authOptions = {
             throw new Error('Invalid password');
           }
 
+          // Check if email is verified (skip for team members who accept invitations)
+          if (!user.isEmailVerified && user.role !== 'team_member') {
+            await LoginHistory.create({
+              userId: user._id,
+              ipAddress: credentials.ipAddress || 'unknown',
+              userAgent: credentials.userAgent || 'unknown',
+              success: false,
+              failureReason: 'Email not verified'
+            });
+            throw new Error('Please verify your email address before logging in. Check your inbox for the verification link.');
+          }
+
           if (!user.isActive) {
             // Determine the reason for inactive account
             let failureReason = 'Account inactive';

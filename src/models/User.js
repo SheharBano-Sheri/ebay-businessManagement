@@ -70,6 +70,27 @@ const UserSchema = new mongoose.Schema({
     enum: ['pending', 'approved', 'rejected'],
     default: 'approved' // Explicitly set in signup route for public vendors
   },
+  // Email verification fields
+  isEmailVerified: {
+    type: Boolean,
+    default: false
+  },
+  emailVerificationToken: {
+    type: String,
+    default: null
+  },
+  emailVerificationTokenExpiry: {
+    type: Date,
+    default: null
+  },
+  emailVerificationTokenUsed: {
+    type: Boolean,
+    default: false
+  },
+  emailVerifiedAt: {
+    type: Date,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now

@@ -95,6 +95,16 @@ function SignupFormContent() {
       const data = await response.json();
 
       if (response.ok) {
+        // Check if email verification is required
+        if (data.requiresEmailVerification) {
+          toast.success("Account created! Please check your email to verify your account.", {
+            duration: 6000,
+          });
+          // Redirect to signin with a message about verification
+          router.push("/auth/signin");
+          return;
+        }
+        
         // Check if pending approval
         if (data.pendingApproval) {
           toast.success("Registration successful! Your account is pending approval.");
@@ -104,7 +114,7 @@ function SignupFormContent() {
 
         toast.success("Account created successfully!");
         
-        // Auto sign in
+        // Auto sign in (only for team invitations that don't require verification)
         const result = await signIn("credentials", {
           email: formData.email,
           password: formData.password,
