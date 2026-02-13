@@ -353,20 +353,28 @@ export async function POST(request) {
       }
 
       // --- HANDLE INDIVIDUAL INSERTION FEE ROWS ---
-      if (rowType.toLowerCase() === "insertion fee") {
-        const dateStr =
-          getValue(row, "Date") || getValue(row, "Transaction creation date");
+      const description = (getValue(row, "Description") || "").toLowerCase();
+      const rowTypeLower = rowType.toLowerCase();
+          
+      // Only treat as Monthly Insertion Fee if:
+      // 1. The Type is explicitly "insertion fee" 
+      // OR 2. The description says "insertion fee" AND it's some kind of "fee" type row
+      if (
+        rowTypeLower === "insertion fee" || 
+        (description.includes("insertion fee") && rowTypeLower.includes("other fee"))
+      ) {
+        const dateStr = getValue(row, "Date") || getValue(row, "Transaction creation date");
         const date = parseDate(dateStr);
+        
         if (date) {
           const monthKey = getMonthKey(date);
-          // Fee amounts are usually negative in CSV, we want positive cost
           const amount = parseFloat(
-            getValue(row, "Amount") || getValue(row, "Net amount") || "0",
+            getValue(row, "Amount") || getValue(row, "Net amount") || "0"
           );
-          monthlyInsertionFees[monthKey] =
-            (monthlyInsertionFees[monthKey] || 0) + Math.abs(amount);
+          
+          monthlyInsertionFees[monthKey] = (monthlyInsertionFees[monthKey] || 0) + Math.abs(amount);
         }
-        continue; // Don't add to order groups
+        continue; // This prevents the row from being added to any Order Group
       }
 
       let orderNumber;
@@ -600,10 +608,10 @@ export async function POST(request) {
           itemName: `Monthly Insertion Fees (Includes Tax) - ${month}`,
           orderedQty: 1,
           transactionType: "Insertion Fees",
-          grossAmount: monthlyInsertionFees[month],
-          fees: 0,
+          grossAmount: 0,
+          fees: monthlyInsertionFees[month],
           netAmount: monthlyInsertionFees[month],
-          grossProfit: monthlyInsertionFees[month],
+          grossProfit: -monthlyInsertionFees[month],
           currency: account.defaultCurrency || "GBP",
           orderDate: summaryDate,
           sourcingCost: 0,
