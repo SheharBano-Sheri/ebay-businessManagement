@@ -56,15 +56,58 @@ export const authOptions = {
           }
 
           if (!user.isActive) {
+            // Determine the reason for inactive account
+            let failureReason = 'Account inactive';
+            let errorMessage = 'Your account has been deactivated. Please contact support for assistance.';
+            
+            // Check if account is pending approval
+            if (user.planApprovalStatus === 'pending') {
+              failureReason = 'Account pending approval';
+              errorMessage = 'Your account is pending approval by the administrator. Please check back later.';
+            } 
+            // Check if account was blocked by admin
+            else if (user.planApprovalStatus === 'approved' || user.membershipPlan === 'personal') {
+              failureReason = 'Account blocked by admin';
+              errorMessage = 'Your account has been blocked by the administrator. Please contact support for more information.';
+            }
+            // Check if plan was rejected
+            else if (user.planApprovalStatus === 'rejected') {
+              failureReason = 'Plan rejected';
+              errorMessage = 'Your plan application has been rejected. Please contact support for more information.';
+            }
+
             // Log failed login attempt
             await LoginHistory.create({
               userId: user._id,
               ipAddress: credentials.ipAddress || 'unknown',
               userAgent: credentials.userAgent || 'unknown',
               success: false,
-              failureReason: 'Account inactive'
+              failureReason: failureReason
             });
-            throw new Error('Your account is pending approval by the administrator. Please check back later.');
+            throw new Error(errorMessage);
+          }
+
+          // Check if Enterprise plan user needs approval (this is redundant but kept for explicit clarity)
+          if (user.membershipPlan === 'enterprise' && user.planApprovalStatus === 'pending') {
+            await LoginHistory.create({
+              userId: user._id,
+              ipAddress: credentials.ipAddress || 'unknown',
+              userAgent: credentials.userAgent || 'unknown',
+              success: false,
+              failureReason: 'Enterprise plan pending approval'
+            });
+            throw new Error('Your Enterprise plan is pending approval by the administrator. Please check back later.');
+          }
+
+          if (user.membershipPlan === 'enterprise' && user.planApprovalStatus === 'rejected') {
+            await LoginHistory.create({
+              userId: user._id,
+              ipAddress: credentials.ipAddress || 'unknown',
+              userAgent: credentials.userAgent || 'unknown',
+              success: false,
+              failureReason: 'Enterprise plan rejected'
+            });
+            throw new Error('Your Enterprise plan application has been rejected. Please contact support for more information.');
           }
 
           // Check if public vendor is approved
@@ -173,6 +216,27 @@ export const authOptions = {
     },
     async session({ session, token }) {
       if (token) {
+        // Check if user is still active (not blocked)
+        try {
+          await connectDB();
+          const user = await User.findById(token.id).select('isActive planApprovalStatus role');
+          
+          if (!user || !user.isActive) {
+            // User has been blocked or deleted - invalidate session
+            if (token.sessionToken) {
+              await Session.findOneAndUpdate(
+                { sessionToken: token.sessionToken },
+                { isActive: false }
+              ).catch(() => {});
+            }
+            throw new Error('Session invalid - account has been blocked');
+          }
+        } catch (error) {
+          // If user check fails, return null session to force re-login
+          console.error('Session validation error:', error);
+          return null;
+        }
+
         session.user.id = token.id;
         session.user.accountType = token.accountType;
         session.user.role = token.role;
@@ -183,7 +247,6 @@ export const authOptions = {
         
         // Update last active time
         if (token.sessionToken) {
-          await connectDB();
           await Session.findOneAndUpdate(
             { sessionToken: token.sessionToken },
             { lastActive: new Date() }

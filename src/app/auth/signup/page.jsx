@@ -285,16 +285,17 @@ function SignupFormContent() {
                     >
                       <CardHeader className="p-4">
                         <CardTitle className="text-lg">Personal</CardTitle>
-                        <CardDescription>$9/month</CardDescription>
+                        <CardDescription className="text-xl font-bold text-green-600">FREE</CardDescription>
                       </CardHeader>
                       <CardContent className="p-4 pt-0">
                         <ul className="text-sm space-y-1">
-                          <li>✓ Single user only</li>
-                          <li>✓ Up to 5 store monitors</li>
+                          <li>✓ 1 store and 1 user only</li>
+                          <li>✓ Instant activation</li>
+                          <li>✓ No approval required</li>
+                          <li>✓ Add vendors for internal use</li>
                           <li>✓ Real-time inventory sync</li>
                           <li>✓ Basic analytics dashboard</li>
-                          <li>✓ Email support (24hr response)</li>
-                          <li>✓ Standard API access</li>
+                          <li>✓ Email support</li>
                         </ul>
                       </CardContent>
                     </Card>
@@ -305,37 +306,36 @@ function SignupFormContent() {
                     >
                       <CardHeader className="p-4">
                         <CardTitle className="text-lg">Enterprise</CardTitle>
-                        <CardDescription>$29/month</CardDescription>
+                        <CardDescription className="text-xl font-bold">$20/month</CardDescription>
                       </CardHeader>
                       <CardContent className="p-4 pt-0">
                         <ul className="text-sm space-y-1">
-                          <li>✓ Up to 10 members + 1 Admin</li>
-                          <li>✓ Unlimited store monitors</li>
-                          <li>✓ Automated order processing</li>
+                          <li>✓ Up to 10 active members</li>
+                          <li>✓ Add vendors for team use</li>
                           <li>✓ Advanced team permissions</li>
-                          <li>✓ Priority email & chat support</li>
-                          <li>✓ Custom integrations</li>
+                          <li>✓ Real-time inventory sync</li>
+                          <li>✓ Priority support</li>
+                          <li>⏳ Requires admin approval</li>
+                          <li className="text-xs text-muted-foreground mt-2">* Free during trial period</li>
                         </ul>
                       </CardContent>
                     </Card>
 
-                    <Card 
-                      className={`cursor-pointer transition-all ${membershipPlan === "premium" ? "ring-2 ring-primary" : ""}`}
-                      onClick={() => setMembershipPlan("premium")}
-                    >
+                    <Card className="cursor-not-allowed opacity-60">
                       <CardHeader className="p-4">
                         <CardTitle className="text-lg">Premium</CardTitle>
-                        <CardDescription>Contact for Pricing</CardDescription>
+                        <CardDescription className="text-base font-semibold text-primary">Contact for Pricing</CardDescription>
                       </CardHeader>
                       <CardContent className="p-4 pt-0">
                         <ul className="text-sm space-y-1">
-                          <li>✓ Unlimited team members</li>
+                          <li>✓ More than 10 members</li>
+                          <li>✓ Unlimited team expansion</li>
                           <li>✓ Dedicated account manager</li>
-                          <li>✓ Custom API rate limits</li>
-                          <li>✓ Advanced security & compliance</li>
-                          <li>✓ Custom feature development</li>
+                          <li>✓ Custom integrations</li>
+                          <li>✓ Advanced security</li>
                           <li>✓ 24/7 priority support</li>
                         </ul>
+                        <p className="text-xs text-muted-foreground mt-3">Contact us to discuss your needs</p>
                       </CardContent>
                     </Card>
                   </div>
@@ -355,7 +355,7 @@ function SignupFormContent() {
                 <Card className="border-primary/20">
                   <CardHeader className="p-4">
                     <CardTitle className="text-lg">Public Vendor Plan</CardTitle>
-                    <CardDescription>Free to join</CardDescription>
+                    <CardDescription className="text-base font-semibold text-primary">Contact for Pricing</CardDescription>
                   </CardHeader>
                   <CardContent className="p-4 pt-0">
                     <ul className="text-sm space-y-1">
@@ -365,7 +365,11 @@ function SignupFormContent() {
                       <li>✓ Connect with multiple buyers</li>
                       <li>✓ Track purchase orders</li>
                       <li>✓ Vendor dashboard & analytics</li>
+                      <li>⏳ Requires admin approval</li>
                     </ul>
+                    <p className="text-xs text-muted-foreground mt-3 pt-3 border-t">
+                      To become a public vendor, please contact us. This is not a free service.
+                    </p>
                   </CardContent>
                 </Card>
               </div>

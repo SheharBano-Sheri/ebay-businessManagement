@@ -22,6 +22,7 @@ import {
   IconReport,
   IconSearch,
   IconSettings,
+  IconShield,
   IconUsers,
 } from "@tabler/icons-react";
 
@@ -134,6 +135,15 @@ export function AppSidebar({ ...props }) {
       icon: IconDashboard,
     },
   ];
+
+  // Add Master Admin Panel for Master Admin only (at the top)
+  if (session?.user?.role === "master_admin") {
+    navItems.push({
+      title: "Master Admin Panel",
+      url: "/dashboard/master-admin",
+      icon: IconShield,
+    });
+  }
 
   // Add items based on permissions
   if (hasAccess("orders")) {

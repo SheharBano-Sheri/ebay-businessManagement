@@ -79,10 +79,40 @@ export async function POST(request) {
     // Determine if this is a public vendor signup
     const isPublicVendor = !invitation && accountType === 'public_vendor';
     
+    // Determine plan approval status
+    let planApprovalStatus = 'approved'; // Default for personal plan
+    let maxStores = 1; // Default for personal plan
+    let userIsActive = true; // Default active
+    
+    if (membershipPlan === 'enterprise') {
+      planApprovalStatus = 'pending'; // Enterprise plans need approval
+      maxStores = 5;
+      userIsActive = false; // Inactive until approved
+    } else if (membershipPlan === 'premium') {
+      // Premium plan should not be selectable in signup, but if somehow sent:
+      return NextResponse.json({ 
+        error: 'Premium plan requires manual consultation. Please contact us for pricing.' 
+      }, { status: 400 });
+    } else if (membershipPlan === 'personal') {
+      planApprovalStatus = 'approved'; // Personal is auto-approved
+      maxStores = 1;
+      userIsActive = true;
+    }
+    
+    // Public vendors override the plan logic
+    if (isPublicVendor) {
+      userIsActive = false; // Public vendors start inactive
+      planApprovalStatus = 'approved'; // They use vendorApprovalStatus instead
+    }
+    
     console.log('=== SIGNUP DEBUG ===');
     console.log('Account Type:', accountType);
     console.log('Is Public Vendor:', isPublicVendor);
     console.log('Has Invitation:', !!invitation);
+    console.log('Membership Plan:', membershipPlan);
+    console.log('Plan Approval Status:', planApprovalStatus);
+    console.log('Max Stores:', maxStores);
+    console.log('User Is Active:', userIsActive);
     console.log('==================');
 
     // Create user account
@@ -93,9 +123,11 @@ export async function POST(request) {
       accountType: invitation ? 'user' : (accountType || 'user'),
       role: invitation ? 'team_member' : (isPublicVendor ? 'public_vendor' : 'owner'),
       membershipPlan: invitation ? 'invited' : (membershipPlan || 'personal'),
+      planApprovalStatus: invitation ? 'approved' : planApprovalStatus,
+      maxStores: invitation ? 1 : maxStores,
       membershipStart: new Date(),
       membershipEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-      isActive: isPublicVendor ? false : true, // Public vendors start inactive
+      isActive: invitation ? true : userIsActive,
       vendorApprovalStatus: isPublicVendor ? 'pending' : 'approved' // Public vendors start pending
     };
     
@@ -162,6 +194,22 @@ export async function POST(request) {
       return NextResponse.json({
         message: 'Account created successfully',
         pendingApproval: true, // Flag that this account is pending approval
+        user: {
+          id: user._id,
+          email: user.email,
+          name: user.name,
+          accountType: user.accountType,
+          role: user.role,
+          membershipPlan: user.membershipPlan
+        }
+      }, { status: 201 });
+    }
+
+    // Check if Enterprise plan user (also needs approval notification)
+    if (membershipPlan === 'enterprise' && !invitation) {
+      return NextResponse.json({
+        message: 'Account created successfully',
+        pendingApproval: true, // Flag that this plan is pending approval
         user: {
           id: user._id,
           email: user.email,

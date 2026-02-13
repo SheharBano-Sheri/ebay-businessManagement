@@ -57,15 +57,24 @@ export async function POST(request) {
     console.log('Creating account with data:', body, 'for adminId:', adminId);
 
     // Check plan limits
+    const existingAccounts = await Account.countDocuments({ adminId });
+    
     if (user.membershipPlan === 'personal') {
-      const existingAccounts = await Account.countDocuments({ adminId });
       if (existingAccounts >= 1) {
         return NextResponse.json(
           { error: 'Personal plan allows only 1 account. Upgrade to Enterprise or Premium for more accounts.' },
           { status: 403 }
         );
       }
+    } else if (user.membershipPlan === 'enterprise') {
+      if (existingAccounts >= 5) {
+        return NextResponse.json(
+          { error: 'Enterprise plan allows up to 5 accounts. Upgrade to Premium for unlimited accounts.' },
+          { status: 403 }
+        );
+      }
     }
+    // Premium plan has no limits
 
     const account = new Account({
       ...body,

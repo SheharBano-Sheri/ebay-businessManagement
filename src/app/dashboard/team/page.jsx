@@ -200,14 +200,14 @@ export default function TeamPage() {
     }
   };
 
-  // Define Public Vendor as a specific "plan" type with 5 members
+  // Define plan limits matching backend enforcement
   const planLimits = {
-    personal: { members: 0, description: "Solo usage only" },
-    pro: { members: 10, description: "Up to 10 team members" },
-    enterprise: { members: Infinity, description: "Unlimited team members" },
+    personal: { members: 0, description: "1 user only - no team members" },
+    enterprise: { members: 10, description: "Up to 10 active members" },
+    premium: { members: Infinity, description: "Unlimited team members" },
     public_vendor: {
-      members: 5,
-      description: "Public Vendor Team (5 Members Max)",
+      members: 0,
+      description: "Individual vendor - no team members",
     },
   };
 
@@ -306,8 +306,8 @@ export default function TeamPage() {
                         Team Features Not Available
                       </h3>
                       <p className="text-sm text-muted-foreground mb-4">
-                        Your Personal plan does not include team collaboration
-                        features. Upgrade to Pro or Enterprise to invite team
+                        Your Personal plan is for 1 user only and does not include team collaboration
+                        features. Upgrade to Enterprise (10 members) or Premium (unlimited) to invite team
                         members and manage permissions.
                       </p>
                       <div className="flex gap-2">
@@ -327,7 +327,38 @@ export default function TeamPage() {
               </Card>
             )}
 
-            {/* Team Members List (for Pro/Enterprise/PublicVendor) */}
+            {/* Upgrade Notice for Enterprise Plan at limit */}
+            {currentPlan === "enterprise" && teamMembers.length >= 10 && (
+              <Card className="border-yellow-500/50 bg-yellow-500/5">
+                <CardContent className="pt-6">
+                  <div className="flex items-start gap-4">
+                    <AlertCircle className="h-6 w-6 text-yellow-500 mt-0.5" />
+                    <div className="flex-1">
+                      <h3 className="font-semibold mb-2">
+                        Team Member Limit Reached
+                      </h3>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Your Enterprise plan supports up to 10 active members. To add more team members,
+                        please remove an existing member or upgrade to Premium for unlimited members.
+                      </p>
+                      <div className="flex gap-2">
+                        <Button onClick={() => setIsPricingOpen(true)}>
+                          Upgrade to Premium
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setIsPricingOpen(true)}
+                        >
+                          View Plans
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Team Members List (for Enterprise/Premium/PublicVendor) */}
             {currentPlan !== "personal" && (
               <Card>
                 <CardHeader>
@@ -876,7 +907,7 @@ export default function TeamPage() {
               </Dialog>
             )}
 
-            {/* Permissions Matrix (for Pro/Enterprise/PublicVendor) */}
+            {/* Permissions Matrix (for Enterprise/Premium/PublicVendor) */}
             {currentPlan !== "personal" && (
               <Card>
                 <CardHeader>
@@ -954,19 +985,19 @@ export default function TeamPage() {
                 <ul className="space-y-2 text-sm">
                   <li className="flex items-start gap-2">
                     <span className="text-green-500">✓</span>
-                    <span>Solo usage only</span>
+                    <span>1 user only (no team members)</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-green-500">✓</span>
-                    <span>0 team members</span>
+                    <span>1 store and 1 user</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-green-500">✓</span>
-                    <span>Add private vendors</span>
+                    <span>Add vendors for internal use</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-green-500">✓</span>
-                    <span>Link public vendors</span>
+                    <span>Real-time inventory sync</span>
                   </li>
                 </ul>
                 {currentPlan === "personal" && (
@@ -984,7 +1015,7 @@ export default function TeamPage() {
               <CardHeader>
                 <CardTitle>Enterprise</CardTitle>
                 <div className="text-3xl font-bold">
-                  $49<span className="text-lg font-normal">/mo</span>
+                  $20<span className="text-lg font-normal">/mo</span>
                 </div>
                 <CardDescription>For growing businesses</CardDescription>
               </CardHeader>

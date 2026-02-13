@@ -47,34 +47,34 @@ const PRICING_PLANS = [
   {
     name: "Personal",
     description: "Perfect for solo entrepreneurs starting their business journey",
-    price: "$9/month billed monthly",
-    priceYearly: "$8/month billed yearly",
+    price: "FREE",
+    priceYearly: "FREE",
     features: [
-      "Single user only (no team members)",
-      "Up to 5 store monitors",
+      "1 store and 1 user only",
+      "Instant activation",
+      "No approval required",
+      "Add vendors for internal use",
       "Real-time inventory sync",
-      "Basic analytics dashboard",
-      "Email support (24hr response)",
-      "Standard API access"
+      "Basic analytics & email support"
     ],
-    buttonText: "Start Free Trial",
+    buttonText: "Start Free",
     buttonVariant: "secondary",
     link: "/auth/signup"
   },
   {
     name: "Enterprise",
     description: "Built for growing teams ready to scale their business",
-    price: "$29/month billed monthly",
-    priceYearly: "$24/month billed yearly",
+    price: "$20/month",
+    priceYearly: "$20/month",
     features: [
-      "Up to 10 active team members + 1 Admin",
-      "Unlimited store monitors",
-      "Automated order processing",
+      "Up to 10 active members",
+      "Add vendors for team use",
       "Advanced team permissions",
-      "Priority email & chat support",
-      "Custom integrations"
+      "Real-time inventory sync",
+      "Priority support",
+      "⏳ Requires admin approval"
     ],
-    buttonText: "Subscribe to Enterprise",
+    buttonText: "Sign Up (Pending Approval)",
     buttonVariant: "default",
     popular: true,
     link: "/auth/signup"
@@ -84,11 +84,11 @@ const PRICING_PLANS = [
     description: "Tailored solutions for large-scale operations",
     price: "Contact for Pricing",
     features: [
-      "Unlimited team members",
+      "More than 10 members",
+      "Unlimited team expansion",
       "Dedicated account manager",
-      "Custom API rate limits",
+      "Custom integrations",
       "Advanced security & compliance",
-      "Custom feature development",
       "24/7 priority support"
     ],
     buttonText: "Contact Sales",
@@ -98,16 +98,16 @@ const PRICING_PLANS = [
   {
     name: "Public Vendor",
     description: "Join the marketplace and supply products to business users",
-    price: "Free to join",
+    price: "Contact for Pricing",
     features: [
       "Marketplace vendor account",
       "No team members (individual vendor)",
       "Manage your product catalog",
       "Connect with multiple buyers",
       "Track purchase orders",
-      "Vendor dashboard & analytics"
+      "⏳ Requires admin approval"
     ],
-    buttonText: "Join as Vendor",
+    buttonText: "Become a Vendor",
     buttonVariant: "secondary",
     link: "/auth/signup"
   }

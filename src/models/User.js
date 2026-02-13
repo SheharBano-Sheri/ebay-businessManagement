@@ -28,8 +28,13 @@ const UserSchema = new mongoose.Schema({
   },
   membershipPlan: {
     type: String,
-    enum: ['personal', 'pro', 'enterprise', 'invited', 'team_member'],
+    enum: ['personal', 'enterprise', 'premium', 'invited', 'team_member'],
     default: 'personal'
+  },
+  planApprovalStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'approved' // Personal plan is auto-approved, Enterprise needs approval
   },
   membershipStart: {
     type: Date,
@@ -37,6 +42,10 @@ const UserSchema = new mongoose.Schema({
   },
   membershipEnd: {
     type: Date
+  },
+  maxStores: {
+    type: Number,
+    default: 1 // Personal: 1, Enterprise: 5, Premium: unlimited
   },
   adminId: {
     type: mongoose.Schema.Types.ObjectId,
