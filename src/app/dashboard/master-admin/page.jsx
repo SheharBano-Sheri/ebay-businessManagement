@@ -26,6 +26,7 @@ import {
   Ban,
   CheckCheck,
   Shield,
+  RefreshCw,
 } from "lucide-react";
 import {
   Table,
@@ -81,7 +82,7 @@ export default function MasterAdminDashboard() {
 
       if (usersRes.ok) {
         const usersData = await usersRes.json();
-        // FIX: Handle API returning direct array or object wrapper
+        // Handle API returning direct array or object wrapper
         const usersList = Array.isArray(usersData)
           ? usersData
           : usersData.users || [];
@@ -90,7 +91,7 @@ export default function MasterAdminDashboard() {
 
       if (vendorsRes.ok) {
         const vendorsData = await vendorsRes.json();
-        // FIX: Handle API returning direct array or object wrapper
+        // Handle API returning direct array or object wrapper
         const vendorsList = Array.isArray(vendorsData)
           ? vendorsData
           : vendorsData.vendors || [];
@@ -146,7 +147,6 @@ export default function MasterAdminDashboard() {
 
   const handleBlockUser = async (userId, block) => {
     try {
-      console.log("Blocking/Unblocking user:", { userId, block });
       const response = await fetch(`/api/admin/users/${userId}/block`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -154,7 +154,6 @@ export default function MasterAdminDashboard() {
       });
 
       const data = await response.json();
-      console.log("Block response:", data);
 
       if (response.ok) {
         toast.success(
@@ -178,7 +177,7 @@ export default function MasterAdminDashboard() {
       });
 
       if (response.ok) {
-        toast.success("Vendor approved successfully");
+        toast.success("Vendor approved/activated successfully");
         fetchData();
       } else {
         const data = await response.json();
@@ -198,7 +197,7 @@ export default function MasterAdminDashboard() {
       });
 
       if (response.ok) {
-        toast.success("Vendor rejected");
+        toast.success("Vendor rejected/blocked successfully");
         fetchData();
       } else {
         const data = await response.json();
@@ -288,13 +287,17 @@ export default function MasterAdminDashboard() {
                     Manage users, plans, and vendor approvals
                   </p>
                 </div>
+                <Button onClick={fetchData} variant="outline" size="sm">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh Data
+                </Button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-medium">
-                      Pending Approvals
+                      Pending User Approvals
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -309,21 +312,6 @@ export default function MasterAdminDashboard() {
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-medium">
-                      Active Users
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">
-                      {activeUsers.length}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Approved and active
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-medium">
                       Pending Vendors
                     </CardTitle>
                   </CardHeader>
@@ -332,14 +320,29 @@ export default function MasterAdminDashboard() {
                       {pendingVendors.length}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Awaiting approval
+                      Vendor profiles waiting
                     </p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-medium">
-                      Blocked Users
+                      Active Users
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {activeUsers.length}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Approved accounts
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">
+                      Blocked/Inactive
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -347,7 +350,7 @@ export default function MasterAdminDashboard() {
                       {blockedUsers.length}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Inactive accounts
+                      Accounts suspended
                     </p>
                   </CardContent>
                 </Card>
@@ -503,7 +506,7 @@ export default function MasterAdminDashboard() {
                     <CardHeader>
                       <CardTitle>All Vendors</CardTitle>
                       <CardDescription>
-                        Manage vendor accounts and approvals
+                        Manage vendor accounts, approvals, and status
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -570,37 +573,67 @@ export default function MasterAdminDashboard() {
                                 </TableCell>
                                 <TableCell>
                                   <div className="flex gap-2">
-                                    {vendor.approvalStatus === "pending" && (
-                                      <>
-                                        <Button
-                                          size="sm"
-                                          variant="default"
-                                          onClick={() =>
-                                            setSelectedAction({
-                                              type: "approve-vendor",
-                                              vendorId: vendor._id,
-                                              vendorName: vendor.name,
-                                            })
-                                          }
-                                        >
-                                          <CheckCircle className="h-4 w-4 mr-1" />
-                                          Approve
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="destructive"
-                                          onClick={() =>
-                                            setSelectedAction({
-                                              type: "reject-vendor",
-                                              vendorId: vendor._id,
-                                              vendorName: vendor.name,
-                                            })
-                                          }
-                                        >
-                                          <XCircle className="h-4 w-4 mr-1" />
-                                          Reject
-                                        </Button>
-                                      </>
+                                    {/* Action buttons for Vendors */}
+                                    {(vendor.approvalStatus === "pending" ||
+                                      vendor.approvalStatus === "rejected") && (
+                                      <Button
+                                        size="sm"
+                                        variant="default"
+                                        onClick={() =>
+                                          setSelectedAction({
+                                            type: "approve-vendor",
+                                            vendorId: vendor._id,
+                                            vendorName: vendor.name,
+                                            isReactivation:
+                                              vendor.approvalStatus ===
+                                              "rejected",
+                                          })
+                                        }
+                                      >
+                                        {vendor.approvalStatus ===
+                                        "rejected" ? (
+                                          <>
+                                            <CheckCheck className="h-4 w-4 mr-1" />{" "}
+                                            Reactivate
+                                          </>
+                                        ) : (
+                                          <>
+                                            <CheckCircle className="h-4 w-4 mr-1" />{" "}
+                                            Approve
+                                          </>
+                                        )}
+                                      </Button>
+                                    )}
+
+                                    {(vendor.approvalStatus === "pending" ||
+                                      vendor.approvalStatus === "approved") && (
+                                      <Button
+                                        size="sm"
+                                        variant="destructive"
+                                        onClick={() =>
+                                          setSelectedAction({
+                                            type: "reject-vendor",
+                                            vendorId: vendor._id,
+                                            vendorName: vendor.name,
+                                            isBlock:
+                                              vendor.approvalStatus ===
+                                              "approved",
+                                          })
+                                        }
+                                      >
+                                        {vendor.approvalStatus ===
+                                        "approved" ? (
+                                          <>
+                                            <Ban className="h-4 w-4 mr-1" />{" "}
+                                            Block
+                                          </>
+                                        ) : (
+                                          <>
+                                            <XCircle className="h-4 w-4 mr-1" />{" "}
+                                            Reject
+                                          </>
+                                        )}
+                                      </Button>
                                     )}
                                   </div>
                                 </TableCell>
@@ -622,17 +655,25 @@ export default function MasterAdminDashboard() {
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>
+                      {/* Users Titles */}
                       {selectedAction?.type === "approve" &&
                         "Approve User Plan"}
                       {selectedAction?.type === "reject" && "Reject User Plan"}
                       {selectedAction?.type === "block" && "Block User"}
                       {selectedAction?.type === "unblock" && "Unblock User"}
+
+                      {/* Vendors Titles */}
                       {selectedAction?.type === "approve-vendor" &&
-                        "Approve Vendor"}
+                        (selectedAction.isReactivation
+                          ? "Reactivate Vendor"
+                          : "Approve Vendor")}
                       {selectedAction?.type === "reject-vendor" &&
-                        "Reject Vendor"}
+                        (selectedAction.isBlock
+                          ? "Block Vendor"
+                          : "Reject Vendor")}
                     </AlertDialogTitle>
                     <AlertDialogDescription>
+                      {/* User Descriptions */}
                       {selectedAction?.type === "approve" &&
                         `Are you sure you want to approve the Enterprise plan for ${selectedAction.userName}? The user will gain access to their account.`}
                       {selectedAction?.type === "reject" &&
@@ -641,15 +682,23 @@ export default function MasterAdminDashboard() {
                         `Are you sure you want to block ${selectedAction.userName}? They will lose access to their account.`}
                       {selectedAction?.type === "unblock" &&
                         `Are you sure you want to unblock ${selectedAction.userName}? They will regain access to their account.`}
+
+                      {/* Vendor Descriptions */}
                       {selectedAction?.type === "approve-vendor" &&
-                        `Are you sure you want to approve ${selectedAction.vendorName}? They will gain access to the vendor portal.`}
+                        `Are you sure you want to ${selectedAction.isReactivation ? "reactivate" : "approve"} ${selectedAction.vendorName}? They will gain access to the vendor portal.`}
                       {selectedAction?.type === "reject-vendor" &&
-                        `Are you sure you want to reject ${selectedAction.vendorName}? They will not be able to access the vendor portal.`}
+                        `Are you sure you want to ${selectedAction.isBlock ? "block" : "reject"} ${selectedAction.vendorName}? They will not be able to access the vendor portal.`}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
+                      className={
+                        selectedAction?.type.includes("reject") ||
+                        selectedAction?.type === "block"
+                          ? "bg-red-600 hover:bg-red-700"
+                          : ""
+                      }
                       onClick={() => {
                         if (selectedAction?.type === "approve") {
                           handleApproveUser(selectedAction.userId);
