@@ -1,31 +1,32 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import connectDB from '@/lib/mongodb';
-import Vendor from '@/models/Vendor';
-import User from '@/models/User';
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import connectDB from "@/lib/mongodb";
+import Vendor from "@/models/Vendor";
+import User from "@/models/User";
 
 export async function POST(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session || session.user.role !== 'master_admin') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session || session.user.role !== "master_admin") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     await connectDB();
 
-    const vendorId = params.id;
-    const vendor = await Vendor.findById(vendorId);
+    // FIX 1: Await params before using properties
+    const { id } = await params;
+    const vendor = await Vendor.findById(id);
 
     if (!vendor) {
-      return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
+      return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
     }
 
-    // Reject the vendor
-    vendor.approvalStatus = 'rejected';
+    // FIX 2: Set status to 'inactive' (valid enum) instead of 'rejected'
+    vendor.approvalStatus = "rejected";
     vendor.isActive = false;
-    vendor.status = 'rejected';
+    vendor.status = "inactive";
     await vendor.save();
 
     // If this is a public vendor with a linked user account, deactivate the user too
@@ -33,17 +34,20 @@ export async function POST(request, { params }) {
       const user = await User.findById(vendor.publicVendorUserId);
       if (user) {
         user.isActive = false;
-        user.vendorApprovalStatus = 'rejected';
+        user.vendorApprovalStatus = "rejected";
         await user.save();
       }
     }
 
-    return NextResponse.json({ message: 'Vendor rejected', vendor }, { status: 200 });
-  } catch (error) {
-    console.error('Error rejecting vendor:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      { message: "Vendor rejected", vendor },
+      { status: 200 },
+    );
+  } catch (error) {
+    console.error("Error rejecting vendor:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
     );
   }
 }
