@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
+import UserCheck from "lucide-react";
 // import { useTheme } from "next-themes"; // Removed as it is no longer needed for the logo
 import Image from "next/image";
 import {
@@ -216,6 +217,14 @@ export function AppSidebar({ ...props }) {
       url: "/dashboard/vendor-approvals",
       icon: IconUsers,
     });
+  }
+
+    if (session?.user?.role === "master_admin") {
+      navItems.push({
+        title: "User Approvals",
+        url: "/dashboard/user-approvals",
+        icon: IconUsers,
+      });
   }
 
   // STATIC LOGO: Use the specific image for all themes
