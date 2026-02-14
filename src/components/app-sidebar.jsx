@@ -138,13 +138,13 @@ export function AppSidebar({ ...props }) {
   ];
 
   // Add Master Admin Panel for Master Admin only (at the top)
-  if (session?.user?.role === "master_admin") {
-    navItems.push({
-      title: "Master Admin Panel",
-      url: "/dashboard/master-admin",
-      icon: IconShield,
-    });
-  }
+  // if (session?.user?.role === "master_admin") {
+  //   navItems.push({
+  //     title: "Master Admin Panel",
+  //     url: "/dashboard/master-admin",
+  //     icon: IconShield,
+  //   });
+  // }
 
   // Add items based on permissions
   if (hasAccess("orders")) {
@@ -223,7 +223,7 @@ export function AppSidebar({ ...props }) {
       navItems.push({
         title: "User Approvals",
         url: "/dashboard/user-approvals",
-        icon: IconUsers,
+        icon: IconShield,
       });
   }
 
