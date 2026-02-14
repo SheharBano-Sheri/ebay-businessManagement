@@ -8,16 +8,14 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { Package, Clock, Eye, EyeOff, CheckCircle2, Mail } from "lucide-react";
+import { Clock, Eye, EyeOff, CheckCircle2, Mail } from "lucide-react";
 
 function SignInForm() {
   const router = useRouter();
@@ -26,7 +24,7 @@ function SignInForm() {
   const [pendingApproval, setPendingApproval] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
   const [emailNotVerified, setEmailNotVerified] = useState(false);
-  const [showPassword, setShowPassword] = useState(false); // New state for password visibility
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -35,11 +33,11 @@ function SignInForm() {
   useEffect(() => {
     const isPending = searchParams.get("pending");
     const isVerified = searchParams.get("verified");
-    
+
     if (isPending === "true") {
       setPendingApproval(true);
     }
-    
+
     if (isVerified === "true") {
       setEmailVerified(true);
       toast.success("Email verified! You can now sign in.");
@@ -58,39 +56,30 @@ function SignInForm() {
     setLoading(true);
 
     try {
-      // Get IP and user agent from server
-      const metadataResponse = await fetch("/api/auth/signin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: formData.email }),
+      // Attempt to sign in
+      const result = await signIn("credentials", {
+        email: formData.email,
+        password: formData.password,
+        redirect: false,
       });
 
-      const metadata = await metadataResponse.json();
-
-      co// Check if error is related to email verification
-        if (result.error.includes("verify your email")) {
+      if (result?.error) {
+        // Check if error is related to email verification
+        if (result.error.toLowerCase().includes("verify your email")) {
           setEmailNotVerified(true);
           toast.error(result.error, {
             duration: 5000,
           });
         } else {
           toast.error(result.error);
-        }"credentials", {
-        email: formData.email,
-        password: formData.password,
-        ipAddress: metadata.ipAddress,
-        userAgent: metadata.userAgent,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        toast.error(result.error);
+        }
       } else if (result?.ok) {
         toast.success("Signed in successfully!");
         router.refresh();
         router.push("/dashboard");
       }
     } catch (error) {
+      console.error("Sign in error:", error);
       toast.error("An error occurred during sign in");
     } finally {
       setLoading(false);
@@ -102,47 +91,48 @@ function SignInForm() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-           emailVerified && (
+            {/* Logo or Icon could go here */}
+          </div>
+
+          {emailVerified && (
             <Alert className="mb-6 border-green-200 bg-green-50">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <AlertDescription className="text-green-800">
-                <strong>Email verified successfully!</strong> You can now sign in to your account.
+                <strong>Email verified successfully!</strong> You can now sign
+                in to your account.
               </AlertDescription>
             </Alert>
           )}
-          
+
           {pendingApproval && (
             <Alert className="mb-6 border-yellow-200 bg-yellow-50">
               <Clock className="h-4 w-4 text-yellow-600" />
               <AlertDescription className="text-yellow-800">
-                Your account is pending approval by the administrator. You will be able to sign in once approved. Please check back soon.
+                Your account is pending approval by the administrator. You will
+                be able to sign in once approved. Please check back soon.
               </AlertDescription>
             </Alert>
           )}
-          
+
           {emailNotVerified && (
             <Alert className="mb-6 border-orange-200 bg-orange-50">
               <Mail className="h-4 w-4 text-orange-600" />
               <AlertDescription className="text-orange-800">
-                <strong>Email not verified.</strong> Please check your inbox for the verification link.
+                <strong>Email not verified.</strong> Please check your inbox for
+                the verification link.
                 <div className="mt-2">
-                  <Link href="/auth/resend-verification" className="text-orange-900 underline hover:no-underline font-medium">
+                  <Link
+                    href="/auth/resend-verification"
+                    className="text-orange-900 underline hover:no-underline font-medium"
+                  >
                     Resend verification email
                   </Link>
                 </div>
               </AlertDescription>
             </Alert>
           )}
-              Your account is pending approval by the administrator. You will be able to sign in once approved. Please check back soon.
-=======
-                Your vendor account is pending approval by the administrator.
-                You will be able to sign in once approved. Please check back
-                soon.
->>>>>>> f577f2f1f2110dabe06c0b27e039935664b22052
-              </AlertDescription>
-            </Alert>
-          )}
-          <form onSubmit={handleSubmit} className="space-y-4">
+
+          <form onSubmit={handleSubmit} className="space-y-4 text-left">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -167,7 +157,7 @@ function SignInForm() {
                   value={formData.password}
                   onChange={handleChange}
                   required
-                  className="pr-10" // Add padding to prevent text overlapping the icon
+                  className="pr-10"
                 />
                 <button
                   type="button"
@@ -188,11 +178,11 @@ function SignInForm() {
               {loading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
-        </CardContent>
+        </CardHeader>
         <CardFooter className="flex flex-col gap-4">
           <div className="text-center w-full">
             <p className="text-sm text-muted-foreground">
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
               <Link
                 href="/auth/signup"
                 className="text-primary hover:underline"
