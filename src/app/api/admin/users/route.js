@@ -1,31 +1,32 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import { NextResponse } from "next/server";
+import connectDB from "@/lib/mongodb";
+import User from "@/models/User";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export async function GET(request) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session || session.user.role !== 'master_admin') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Check if user is authenticated and is a master admin
+    if (!session || session.user.role !== "master_admin") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     await connectDB();
 
-    // Fetch all users except master admins (don't show in the list)
-    const users = await User.find({ role: { $ne: 'master_admin' } })
-      .select('name email role accountType membershipPlan planApprovalStatus isActive createdAt maxStores')
-      .sort({ createdAt: -1 })
-      .lean();
+    // Fetch all users, sorted by creation date (newest first)
+    // We select specific fields to avoid sending sensitive data like passwords
+    const users = await User.find({})
+      .select("-password")
+      .sort({ createdAt: -1 });
 
-    return NextResponse.json({ users }, { status: 200 });
+    return NextResponse.json(users);
   } catch (error) {
-    console.error('Error fetching users:', error);
+    console.error("Error fetching users:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      { error: "Internal server error" },
+      { status: 500 },
     );
   }
 }
