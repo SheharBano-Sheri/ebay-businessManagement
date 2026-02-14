@@ -138,13 +138,13 @@ export function AppSidebar({ ...props }) {
   ];
 
   // Add Master Admin Panel for Master Admin only (at the top)
-  // if (session?.user?.role === "master_admin") {
-  //   navItems.push({
-  //     title: "Master Admin Panel",
-  //     url: "/dashboard/master-admin",
-  //     icon: IconShield,
-  //   });
-  // }
+  if (session?.user?.role === "master_admin") {
+    navItems.push({
+      title: "Master Admin Panel",
+      url: "/dashboard/master-admin",
+      icon: IconShield,
+    });
+  }
 
   // Add items based on permissions
   if (hasAccess("orders")) {
@@ -219,13 +219,6 @@ export function AppSidebar({ ...props }) {
     });
   }
 
-    if (session?.user?.role === "master_admin") {
-      navItems.push({
-        title: "User Approvals",
-        url: "/dashboard/user-approvals",
-        icon: IconShield,
-      });
-  }
 
   // STATIC LOGO: Use the specific image for all themes
   // Make sure to rename your file to 'logo.png' and place it in the public folder
