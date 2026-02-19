@@ -1,20 +1,55 @@
-export async function sendTeamInvitationEmail({ to, name, inviterName, inviterEmail, role, inviteToken }) {
+import nodemailer from "nodemailer";
+
+export async function sendTeamInvitationEmail({
+  to,
+  name,
+  inviterName,
+  inviterEmail,
+  role,
+  inviteToken,
+}) {
   try {
-    // If no email service is configured, return success but log a warning
     if (!process.env.RESEND_API_KEY && !process.env.EMAIL_HOST) {
-      console.warn('Email service not configured. Skipping invitation email.');
-      return { success: true, skipped: true, message: 'Email service not configured' };
+      console.warn("Email service not configured. Skipping invitation email.");
+      return {
+        success: true,
+        skipped: true,
+        message: "Email service not configured",
+      };
     }
 
-    // Use the configured email as the sender (e.g., Onboarding@geniebms.com)
     const senderEmail = process.env.EMAIL_USER || inviterEmail;
-    const senderName = process.env.APP_NAME || 'Genie Business Management System';
-    
-    const inviteLink = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/auth/signup?token=${inviteToken}&email=${encodeURIComponent(to)}`;
-    
-    // If Resend API key is configured, use Resend (simpler)
+    const senderName =
+      process.env.APP_NAME || "Genie Business Management System";
+
+    const inviteLink = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/auth/signup?token=${inviteToken}&email=${encodeURIComponent(to)}`;
+
+    // Plain Text Version (Updated to match HTML link count)
+    const textContent = `
+Hi ${name},
+
+${inviterName} (${inviterEmail}) has invited you to join their team on eBay Business Management System.
+
+Your Role: ${role.charAt(0).toUpperCase() + role.slice(1)}
+Invited by: ${inviterName}
+
+As a ${role}, you'll have access to collaborate on orders, inventory, and other business operations.
+
+Accept Invitation & Join Team:
+${inviteLink}
+
+If the link above doesn't work, copy and paste this URL into your browser:
+${inviteLink}
+
+This link will create your account automatically. No plan selection needed - you'll be added to ${inviterName}'s team directly.
+
+If you didn't expect this invitation, you can safely ignore this email.
+
+(c) ${new Date().getFullYear()} eBay Business Management System. All rights reserved.
+`;
+
     if (process.env.RESEND_API_KEY) {
-      const { Resend } = require('resend');
+      const { Resend } = require("resend");
       const resend = new Resend(process.env.RESEND_API_KEY);
       const { data, error } = await resend.emails.send({
         from: `${senderName} <${senderEmail}>`,
@@ -32,6 +67,7 @@ export async function sendTeamInvitationEmail({ to, name, inviterName, inviterEm
               .button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
               .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
               .info-box { background: white; padding: 15px; border-left: 4px solid #667eea; margin: 20px 0; }
+              .link-text { word-break: break-all; color: #667eea; font-size: 12px; margin-top: 10px; }
             </style>
           </head>
           <body>
@@ -42,7 +78,7 @@ export async function sendTeamInvitationEmail({ to, name, inviterName, inviterEm
               <div class="content">
                 <p>Hi <strong>${name}</strong>,</p>
                 
-                <p><strong>${inviterName}</strong> (${inviterEmail}) has invited you to join their team on Genie Business Management System.</p>
+                <p><strong>${inviterName}</strong> (${inviterEmail}) has invited you to join their team on eBay Business Management System.</p>
                 
                 <div class="info-box">
                   <p><strong>Your Role:</strong> ${role.charAt(0).toUpperCase() + role.slice(1)}</p>
@@ -56,6 +92,9 @@ export async function sendTeamInvitationEmail({ to, name, inviterName, inviterEm
                     Accept Invitation & Join Team
                   </a>
                 </p>
+
+                <p style="font-size: 12px; margin-top: 20px;">If the button doesn't work, copy this link:</p>
+                <div class="link-text">${inviteLink}</div>
                 
                 <p><small>This link will create your account and automatically add you to the team. No plan selection needed!</small></p>
                 
@@ -68,71 +107,34 @@ export async function sendTeamInvitationEmail({ to, name, inviterName, inviterEm
           </body>
           </html>
         `,
-        text: `
-Hi ${name},
-
-${inviterName} (${inviterEmail}) has invited you to join their team on eBay Business Management System.
-
-Your Role: ${role.charAt(0).toUpperCase() + role.slice(1)}
-Invited by: ${inviterName}
-
-As a ${role}, you'll have access to collaborate on orders, inventory, and other business operations.
-
-Click here to accept invitation and join the team: ${inviteLink}
-
-This link will create your account automatically. No plan selection needed - you'll be added to ${inviterName}'s team directly.
-
-If you didn't expect this invitation, you can safely ignore this email.
-
-(c) ${new Date().getFullYear()} eBay Business Management System. All rights reserved.
-        `,
+        text: textContent,
       });
 
       if (error) {
-        console.error('Resend email error:', error);
+        console.error("Resend email error:", error);
         return { success: false, error: error.message };
       }
 
-      console.log('Email sent successfully via Resend:', data?.id);
       return { success: true, messageId: data?.id };
     }
 
-    // Fallback to nodemailer if Resend not configured
-    console.log('Using SMTP email configuration:', {
-      host: process.env.EMAIL_HOST,
-      port: process.env.EMAIL_PORT,
-      user: process.env.EMAIL_USER,
-      hasPassword: !!process.env.EMAIL_PASSWORD
-    });
-
-    const nodemailer = require('nodemailer');
+    // SMTP Configuration with Secure Logic Fix
     const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+      host: process.env.EMAIL_HOST || "smtp.gmail.com",
       port: parseInt(process.env.EMAIL_PORT) || 587,
-      secure: false, // true for 465, false for other ports
+      secure: parseInt(process.env.EMAIL_PORT) === 465, // True only for 465
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASSWORD,
       },
       tls: {
-        rejectUnauthorized: false
+        rejectUnauthorized: false,
       },
-      debug: true, // Enable debug logs
-      logger: true // Log to console
     });
-
-    // Verify connection
-    try {
-      await transporter.verify();
-      console.log('✅ SMTP server connection verified');
-    } catch (verifyError) {
-      console.error('❌ SMTP verification failed:', verifyError);
-      throw new Error(`SMTP connection failed: ${verifyError.message}`);
-    }
 
     const mailOptions = {
       from: `"${senderName}" <${senderEmail}>`,
-      replyTo: inviterEmail, // Reply goes to the admin who invited
+      replyTo: inviterEmail,
       to,
       subject: `You've been invited to join ${inviterName}'s team`,
       html: `
@@ -147,6 +149,7 @@ If you didn't expect this invitation, you can safely ignore this email.
             .button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
             .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
             .info-box { background: white; padding: 15px; border-left: 4px solid #667eea; margin: 20px 0; }
+            .link-text { word-break: break-all; color: #667eea; font-size: 12px; margin-top: 10px; }
           </style>
         </head>
         <body>
@@ -171,6 +174,9 @@ If you didn't expect this invitation, you can safely ignore this email.
                   Accept Invitation & Join Team
                 </a>
               </p>
+
+              <p style="font-size: 12px; margin-top: 20px;">If the button doesn't work, copy this link:</p>
+              <div class="link-text">${inviteLink}</div>
               
               <p><small>This link will create your account and automatically add you to the team. No plan selection needed!</small></p>
               
@@ -183,52 +189,69 @@ If you didn't expect this invitation, you can safely ignore this email.
         </body>
         </html>
       `,
-      text: `
-Hi ${name},
-
-${inviterName} (${inviterEmail}) has invited you to join their team on eBay Business Management System.
-
-Your Role: ${role.charAt(0).toUpperCase() + role.slice(1)}
-Invited by: ${inviterName}
-
-As a ${role}, you'll have access to collaborate on orders, inventory, and other business operations.
-
-Click here to accept invitation and join the team: ${inviteLink}
-
-This link will create your account automatically. No plan selection needed - you'll be added to ${inviterName}'s team directly.
-
-If you didn't expect this invitation, you can safely ignore this email.
-
-(c) ${new Date().getFullYear()} eBay Business Management System. All rights reserved.
-      `,
+      text: textContent,
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log('Email sent successfully via SMTP:', info.messageId);
     return { success: true, messageId: info.messageId };
-
   } catch (error) {
-    console.error('Email sending failed:', error);
+    console.error("Email sending failed:", error);
     return { success: false, error: error.message };
   }
 }
 
-export async function sendVendorInvitationEmail({ to, name, businessName, inviterName, inviterEmail, inviteToken }) {
+export async function sendVendorInvitationEmail({
+  to,
+  name,
+  businessName,
+  inviterName,
+  inviterEmail,
+  inviteToken,
+}) {
   try {
-    // If no email service is configured, return success but log a warning
     if (!process.env.RESEND_API_KEY && !process.env.EMAIL_HOST) {
-      console.warn('Email service not configured. Skipping vendor invitation email.');
-      return { success: true, skipped: true, message: 'Email service not configured' };
+      console.warn(
+        "Email service not configured. Skipping vendor invitation email.",
+      );
+      return {
+        success: true,
+        skipped: true,
+        message: "Email service not configured",
+      };
     }
 
     const senderEmail = process.env.EMAIL_USER || inviterEmail;
-    const senderName = process.env.APP_NAME || 'Genie Business Management System';
-    
-    const inviteLink = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/auth/signup?token=${inviteToken}&email=${encodeURIComponent(to)}&type=vendor`;
-    
-    // If Resend API key is configured, use Resend
+    const senderName =
+      process.env.APP_NAME || "Genie Business Management System";
+
+    const inviteLink = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/auth/signup?token=${inviteToken}&email=${encodeURIComponent(to)}&type=vendor`;
+
+    const textContent = `
+Hi ${name},
+
+${inviterName} (${inviterEmail}) has invited ${businessName} to join the eBay Business Management System marketplace as a vendor.
+
+Benefits:
+- Connect with eBay businesses looking for suppliers
+- Manage your product catalog
+- Track orders and relationships
+- Build your vendor profile
+
+Accept Invitation & Join Marketplace:
+${inviteLink}
+
+If the link above doesn't work, copy and paste this URL into your browser:
+${inviteLink}
+
+This link will create your vendor account automatically. No subscription required!
+
+If you didn't expect this invitation, you can safely ignore this email.
+
+(c) ${new Date().getFullYear()} eBay Business Management System. All rights reserved.
+`;
+
     if (process.env.RESEND_API_KEY) {
-      const { Resend } = require('resend');
+      const { Resend } = require("resend");
       const resend = new Resend(process.env.RESEND_API_KEY);
       const { data, error } = await resend.emails.send({
         from: `${senderName} <${senderEmail}>`,
@@ -246,6 +269,7 @@ export async function sendVendorInvitationEmail({ to, name, businessName, invite
               .button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
               .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
               .info-box { background: white; padding: 15px; border-left: 4px solid #667eea; margin: 20px 0; }
+              .link-text { word-break: break-all; color: #667eea; font-size: 12px; margin-top: 10px; }
             </style>
           </head>
           <body>
@@ -273,6 +297,9 @@ export async function sendVendorInvitationEmail({ to, name, businessName, invite
                     Accept Invitation & Join Marketplace
                   </a>
                 </p>
+
+                <p style="font-size: 12px; margin-top: 20px;">If the button doesn't work, copy this link:</p>
+                <div class="link-text">${inviteLink}</div>
                 
                 <p><small>This link will create your vendor account automatically. No subscription required!</small></p>
                 
@@ -285,42 +312,21 @@ export async function sendVendorInvitationEmail({ to, name, businessName, invite
           </body>
           </html>
         `,
-        text: `
-Hi ${name},
-
-${inviterName} (${inviterEmail}) has invited ${businessName} to join the eBay Business Management System marketplace as a vendor.
-
-Benefits:
-- Connect with eBay businesses looking for suppliers
-- Manage your product catalog
-- Track orders and relationships
-- Build your vendor profile
-
-Click here to accept invitation and join the marketplace: ${inviteLink}
-
-This link will create your vendor account automatically. No subscription required!
-
-If you didn't expect this invitation, you can safely ignore this email.
-
-(c) ${new Date().getFullYear()} eBay Business Management System. All rights reserved.
-        `,
+        text: textContent,
       });
 
       if (error) {
-        console.error('Resend email error:', error);
+        console.error("Resend email error:", error);
         return { success: false, error: error.message };
       }
 
-      console.log('Vendor invitation email sent via Resend:', data?.id);
       return { success: true, messageId: data?.id };
     }
 
-    // Fallback to nodemailer
-    const nodemailer = require('nodemailer');
     const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+      host: process.env.EMAIL_HOST || "smtp.gmail.com",
       port: process.env.EMAIL_PORT || 587,
-      secure: false,
+      secure: parseInt(process.env.EMAIL_PORT) === 465,
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASSWORD,
@@ -329,7 +335,7 @@ If you didn't expect this invitation, you can safely ignore this email.
 
     const mailOptions = {
       from: `"${senderName}" <${senderEmail}>`,
-      replyTo: inviterEmail, // Reply goes to the admin who invited
+      replyTo: inviterEmail,
       to,
       subject: `You've been invited to join GenieBMS Marketplace`,
       html: `
@@ -344,6 +350,7 @@ If you didn't expect this invitation, you can safely ignore this email.
             .button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
             .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
             .info-box { background: white; padding: 15px; border-left: 4px solid #667eea; margin: 20px 0; }
+            .link-text { word-break: break-all; color: #667eea; font-size: 12px; margin-top: 10px; }
           </style>
         </head>
         <body>
@@ -371,6 +378,9 @@ If you didn't expect this invitation, you can safely ignore this email.
                   Accept Invitation & Join Marketplace
                 </a>
               </p>
+
+              <p style="font-size: 12px; margin-top: 20px;">If the button doesn't work, copy this link:</p>
+              <div class="link-text">${inviteLink}</div>
               
               <p><small>This link will create your vendor account automatically. No subscription required!</small></p>
               
@@ -383,67 +393,68 @@ If you didn't expect this invitation, you can safely ignore this email.
         </body>
         </html>
       `,
-      text: `
-Hi ${name},
-
-${inviterName} (${inviterEmail}) has invited ${businessName} to join the eBay Business Management System marketplace as a vendor.
-
-Benefits:
-- Connect with eBay businesses looking for suppliers
-- Manage your product catalog
-- Track orders and relationships
-- Build your vendor profile
-
-Click here to accept invitation and join the marketplace: ${inviteLink}
-
-This link will create your vendor account automatically. No subscription required!
-
-If you didn't expect this invitation, you can safely ignore this email.
-
-(c) ${new Date().getFullYear()} eBay Business Management System. All rights reserved.
-      `,
+      text: textContent,
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log('Vendor invitation email sent via SMTP:', info.messageId);
     return { success: true, messageId: info.messageId };
-
   } catch (error) {
-    console.error('Vendor invitation email failed:', error);
+    console.error("Vendor invitation email failed:", error);
     return { success: false, error: error.message };
   }
 }
 
-/**
- * Send email verification link to new user
- * @param {Object} params - Email parameters
- * @param {string} params.to - Recipient email
- * @param {string} params.name - User's name
- * @param {string} params.verificationToken - Verification token
- * @returns {Promise<Object>} Email sending result
- */
 export async function sendVerificationEmail({ to, name, verificationToken }) {
   try {
-    // If no email service is configured, return success but log a warning
     if (!process.env.RESEND_API_KEY && !process.env.EMAIL_HOST) {
-      console.warn('Email service not configured. Skipping verification email.');
-      return { success: true, skipped: true, message: 'Email service not configured' };
+      console.warn(
+        "Email service not configured. Skipping verification email.",
+      );
+      return {
+        success: true,
+        skipped: true,
+        message: "Email service not configured",
+      };
     }
 
-    const senderEmail = process.env.EMAIL_USER || 'noreply@geniebms.com';
-    const senderName = process.env.APP_NAME || 'Genie Business Management System';
-    const appUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-    
+    const senderEmail = process.env.EMAIL_USER || "noreply@geniebms.com";
+    const senderName =
+      process.env.APP_NAME || "Genie Business Management System";
+    const appUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+
     const verificationLink = `${appUrl}/auth/verify-email?token=${verificationToken}`;
-    
-    // If Resend API key is configured, use Resend
+
+    // Updated Plain Text to match HTML link quantity (2 links)
+    const textContent = `
+Hi ${name},
+
+Welcome to Genie Business Management System! We're excited to have you on board.
+
+To complete your registration and access your account, please verify your email address by clicking the button below:
+
+${verificationLink}
+
+IMPORTANT:
+- This verification link will expire in 24 hours.
+- This link can only be used once.
+
+If the button above doesn't work, copy and paste this link into your browser:
+${verificationLink}
+
+If you didn't create an account with us, please ignore this email.
+
+Need help? Contact our support team.
+
+(c) ${new Date().getFullYear()} Genie Business Management System. All rights reserved.
+`;
+
     if (process.env.RESEND_API_KEY) {
-      const { Resend } = require('resend');
+      const { Resend } = require("resend");
       const resend = new Resend(process.env.RESEND_API_KEY);
       const { data, error } = await resend.emails.send({
         from: `${senderName} <${senderEmail}>`,
         to,
-        subject: 'Please Verify Your Email Address',
+        subject: "Please Verify Your Email Address",
         html: `
           <!DOCTYPE html>
           <html>
@@ -534,78 +545,55 @@ export async function sendVerificationEmail({ to, name, verificationToken }) {
           </body>
           </html>
         `,
-        text: `
-Hi ${name},
-
-Welcome to Genie Business Management System! We're excited to have you on board.
-
-To complete your registration and access your account, please verify your email address by clicking the link below:
-
-${verificationLink}
-
-IMPORTANT:
-- This verification link will expire in 24 hours.
-- This link can only be used once.
-
-If you didn't create an account with us, please ignore this email.
-
-Need help? Contact our support team.
-
-(c) ${new Date().getFullYear()} Genie Business Management System. All rights reserved.
-        `,
+        text: textContent,
       });
 
       if (error) {
-        console.error('Resend verification email error:', error);
+        console.error("Resend verification email error:", error);
         return { success: false, error: error.message };
       }
 
-      console.log('Verification email sent successfully via Resend:', data?.id);
       return { success: true, messageId: data?.id };
     }
 
-    // Fallback to nodemailer if Resend not configured
-    if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-      console.warn('SMTP not fully configured. Skipping verification email.');
-      return { success: true, skipped: true, message: 'SMTP not configured' };
+    if (
+      !process.env.EMAIL_HOST ||
+      !process.env.EMAIL_USER ||
+      !process.env.EMAIL_PASSWORD
+    ) {
+      console.warn("SMTP not fully configured. Skipping verification email.");
+      return { success: true, skipped: true, message: "SMTP not configured" };
     }
 
-    console.log('Using SMTP email configuration for verification:', {
-      host: process.env.EMAIL_HOST,
-      port: process.env.EMAIL_PORT,
-      user: process.env.EMAIL_USER,
-      hasPassword: !!process.env.EMAIL_PASSWORD
-    });
-
-    const nodemailer = require('nodemailer');
     const transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
-      port: parseInt(process.env.EMAIL_PORT || '587'),
-      secure: false, // true for 465, false for other ports
+      port: parseInt(process.env.EMAIL_PORT || "587"),
+      secure: parseInt(process.env.EMAIL_PORT) === 465, // Corrected SSL logic
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASSWORD,
       },
       tls: {
-        rejectUnauthorized: false
+        rejectUnauthorized: false,
       },
-      debug: true, // Enable debug logs
-      logger: true // Log to console
+      debug: true,
+      logger: true,
     });
 
-    // Verify connection
     try {
       await transporter.verify();
-      console.log('✅ SMTP server connection verified for verification email');
     } catch (verifyError) {
-      console.error('❌ SMTP verification failed:', verifyError);
-      return { success: false, error: `SMTP connection failed: ${verifyError.message}` };
+      console.error("❌ SMTP verification failed:", verifyError);
+      return {
+        success: false,
+        error: `SMTP connection failed: ${verifyError.message}`,
+      };
     }
 
     const mailOptions = {
       from: `"${senderName}" <${senderEmail}>`,
       to,
-      subject: 'Please Verify Your Email Address',
+      subject: "Please Verify Your Email Address",
       html: `
         <!DOCTYPE html>
         <html>
@@ -696,33 +684,13 @@ Need help? Contact our support team.
         </body>
         </html>
       `,
-      text: `
-Hi ${name},
-
-Welcome to Genie Business Management System! We're excited to have you on board.
-
-To complete your registration and access your account, please verify your email address by clicking the link below:
-
-${verificationLink}
-
-IMPORTANT:
-- This verification link will expire in 24 hours.
-- This link can only be used once.
-
-If you didn't create an account with us, please ignore this email.
-
-Need help? Contact our support team.
-
-(c) ${new Date().getFullYear()} Genie Business Management System. All rights reserved.
-      `,
+      text: textContent,
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log('Verification email sent via SMTP:', info.messageId);
     return { success: true, messageId: info.messageId };
-
   } catch (error) {
-    console.error('Verification email failed:', error);
+    console.error("Verification email failed:", error);
     return { success: false, error: error.message };
   }
 }
