@@ -155,80 +155,48 @@ export async function GET(request) {
   }
 }
 
+// Inside src/app/api/products/route.js 
+
 export async function POST(request) {
   try {
-    // Check permission - need 'edit' for POST
     const { authorized, user, error } = await checkPermission('inventory', 'edit');
-    
-    if (!authorized) {
-      return NextResponse.json({ error: error || 'Insufficient permissions to add products' }, { status: 403 });
-    }
+    if (!authorized) return NextResponse.json({ error: error || 'Insufficient permissions to add products' }, { status: 403 });
     
     const session = await getServerSession(authOptions);
-
     await connectDB();
     const body = await request.json();
 
-    const { country, sku, name, description, type, vendorId, stock, unitCost, currency, images, listingUrl } = body;
+    // Include hasVariations and variations here
+    const { country, sku, name, description, type, vendorId, stock, unitCost, currency, images, listingUrl, hasVariations, variations } = body;
 
-    // For regular users (owner), adminId is their own ID
-    // For team members, adminId is their admin's ID
     const adminId = session.user.adminId || session.user.id;
     
-    console.log('Creating product with data:', { sku, name, vendorId, adminId, userId: session.user.id });
-
     if (!sku || !name || !vendorId) {
       return NextResponse.json({ error: 'Missing required fields: sku, name, vendorId' }, { status: 400 });
     }
 
-    // Check if vendor exists and get its properties
     const vendor = await Vendor.findById(vendorId);
-    
-    if (!vendor) {
-      console.error('Vendor not found:', vendorId);
-      return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
-    }
+    if (!vendor) return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
 
-    console.log('Vendor found:', { id: vendor._id, type: vendor.vendorType, autoApprove: vendor.autoApproveInventory, approvalStatus: vendor.approvalStatus });
-    
     let isApproved = false;
     let approvedBy = null;
     let approvedAt = null;
-    let approvalStatus = 'pending'; // Default to pending
+    let approvalStatus = 'pending';
 
-    // --- APPROVAL LOGIC ---
-    
-    // 1. Master Admin: Always Auto-Approve
-    if (session.user.role === 'master_admin') {
-        isApproved = true;
-        approvedBy = session.user.id;
-        approvedAt = new Date();
-        approvalStatus = 'approved';
-        console.log('Product auto-approved: Creator is Master Admin');
-    }
-    // 2. Private/Virtual Vendors: Always Auto-Approve
-    else if (vendor.vendorType === 'private' || vendor.vendorType === 'virtual') {
+    if (session.user.role === 'master_admin' || vendor.vendorType === 'private' || vendor.vendorType === 'virtual') {
       isApproved = true;
       approvedBy = session.user.id;
       approvedAt = new Date();
       approvalStatus = 'approved';
-      console.log('Product auto-approved: private/virtual vendor');
-    } 
-    // 3. Public Vendors: Check Settings
-    else if (vendor.vendorType === 'public' && vendor.autoApproveInventory === true) {
+    } else if (vendor.vendorType === 'public' && vendor.autoApproveInventory === true) {
       isApproved = true;
-      approvedBy = session.user.id; // System/Self approval
+      approvedBy = session.user.id;
       approvedAt = new Date();
       approvalStatus = 'approved';
-      console.log('Product auto-approved: public vendor has auto-approve enabled');
-    } 
-    // 4. Default: Manual Approval Required
-    else if (vendor.vendorType === 'public') {
+    } else if (vendor.vendorType === 'public') {
       isApproved = false;
       approvalStatus = 'pending';
-      console.log('Product requires manual approval by master admin');
     } else {
-      // Fallback
       isApproved = true;
       approvedBy = session.user.id;
       approvedAt = new Date();
@@ -236,33 +204,20 @@ export async function POST(request) {
     }
 
     const product = await Product.create({
-      country,
-      sku,
-      name,
-      description,
-      type,
-      listingUrl,
-      adminId,
-      vendorId,
+      country, sku, name, description, type, listingUrl, adminId, vendorId,
       addedBy: session.user.id,
       stock: stock || 0,
       unitCost: unitCost || 0,
       currency: currency || 'USD',
       images: images || [],
       isActive: true,
-      approvalStatus,
-      isApproved,
-      approvedBy,
-      approvedAt
+      hasVariations: hasVariations || false,
+      variations: variations || [],
+      approvalStatus, isApproved, approvedBy, approvedAt
     });
 
-    console.log('Product created successfully:', product._id);
     return NextResponse.json({ product }, { status: 201 });
   } catch (error) {
-    console.error('Create product error:', error);
-    return NextResponse.json({ 
-      error: 'Internal server error', 
-      details: error.message
-    }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }

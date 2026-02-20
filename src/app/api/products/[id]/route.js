@@ -5,40 +5,31 @@ import connectDB from '@/lib/mongodb';
 import Product from '@/models/Product';
 import { checkPermission } from '@/lib/permissions';
 
+// Inside src/app/api/products/[id]/route.js
+
 export async function PUT(request, { params }) {
   try {
-    // Check permission - need 'edit' for PUT
     const { authorized, user, error } = await checkPermission('inventory', 'edit');
-    
-    if (!authorized) {
-      return NextResponse.json({ error: error || 'Insufficient permissions to update products' }, { status: 403 });
-    }
+    if (!authorized) return NextResponse.json({ error: error || 'Insufficient permissions to update products' }, { status: 403 });
     
     const session = await getServerSession(authOptions);
-
     await connectDB();
 
     const { id } = params;
     const body = await request.json();
-    const { country, sku, name, description, type, vendorId, stock, unitCost, currency, listingUrl } = body;
+    
+    // Extract variation fields
+    const { country, sku, name, description, type, vendorId, stock, unitCost, currency, listingUrl, hasVariations, variations } = body;
 
     if (!sku || !name || !vendorId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // For regular users (owner), adminId is their own ID
-    // For team members, adminId is their admin's ID
-    // For public vendors, they use their own ID
     const adminId = session.user.adminId || session.user.id;
-
-    // Find the product and ensure it belongs to the user's admin
     const product = await Product.findOne({ _id: id, adminId });
 
-    if (!product) {
-      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
-    }
+    if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 });
 
-    // Update product fields
     product.country = country;
     product.sku = sku;
     product.name = name;
@@ -49,17 +40,17 @@ export async function PUT(request, { params }) {
     product.unitCost = unitCost || 0;
     product.currency = currency || 'USD';
     product.listingUrl = listingUrl;
+    
+    // Save variation data
+    product.hasVariations = hasVariations || false;
+    product.variations = variations || [];
+    
     product.updatedAt = new Date();
 
     await product.save();
 
-    return NextResponse.json({ 
-      message: 'Product updated successfully',
-      product 
-    }, { status: 200 });
-
+    return NextResponse.json({ message: 'Product updated successfully', product }, { status: 200 });
   } catch (error) {
-    console.error('Update product error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
