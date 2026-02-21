@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
 import connectDB from "@/lib/mongodb";
 import Product from "@/models/Product";
+import Vendor from "@/models/Vendor";
 
 export async function GET(request) {
   try {
@@ -19,13 +20,27 @@ export async function GET(request) {
     const adminId = session.user.adminId || session.user.id;
 
     if (type === "template") {
-      // Return CSV template (WooCommerce style with Parent SKU)
+      // Find a default vendor for the user to pre-fill the template
+      let defaultVendorName = "Your Vendor Name";
+      let vendor;
+
+      if (session.user.role === "public_vendor") {
+        vendor = await Vendor.findOne({ publicVendorUserId: session.user.id });
+      } else {
+        vendor = await Vendor.findOne({ adminId: adminId });
+      }
+
+      if (vendor && vendor.name) {
+        defaultVendorName = vendor.name.replace(/"/g, '""'); // Escape any quotes in the vendor name
+      }
+
+      // Return CSV template (WooCommerce style with Parent SKU) using dynamic user vendor name
       const csvTemplate =
         "Country,SKU,Name,Description,Type,Vendor,Stock,Unit Cost,Listing URL,Parent SKU\n" +
-        'USA,TSHIRT-001,Basic T-Shirt,"Comfortable cotton t-shirt",variable,Vendor Name,100,10.00,https://example.com/product,\n' +
-        'USA,TSHIRT-001-V1,"Basic T-Shirt - Color: Red, Size: M","Variation of TSHIRT-001",variation,Vendor Name,50,10.00,https://example.com/product,TSHIRT-001\n' +
-        'USA,TSHIRT-001-V2,"Basic T-Shirt - Color: Blue, Size: L","Variation of TSHIRT-001",variation,Vendor Name,50,10.00,https://example.com/product,TSHIRT-001\n' +
-        'USA,SAMPLE-002,Simple Product,"Standard product description",simple,Vendor Name,20,29.99,https://example.com/product,';
+        `USA,TSHIRT-001,Basic T-Shirt,"Comfortable cotton t-shirt",variable,"${defaultVendorName}",100,10.00,https://example.com/product,\n` +
+        `USA,TSHIRT-001-V1,"Basic T-Shirt - Color: Red, Size: M","Variation of TSHIRT-001",variation,"${defaultVendorName}",50,10.00,https://example.com/product,TSHIRT-001\n` +
+        `USA,TSHIRT-001-V2,"Basic T-Shirt - Color: Blue, Size: L","Variation of TSHIRT-001",variation,"${defaultVendorName}",50,10.00,https://example.com/product,TSHIRT-001\n` +
+        `USA,SAMPLE-002,Simple Product,"Standard product description",simple,"${defaultVendorName}",20,29.99,https://example.com/product,`;
 
       return new NextResponse(csvTemplate, {
         status: 200,
