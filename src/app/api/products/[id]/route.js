@@ -9,26 +9,56 @@ import { checkPermission } from '@/lib/permissions';
 
 export async function PUT(request, { params }) {
   try {
-    const { authorized, user, error } = await checkPermission('inventory', 'edit');
-    if (!authorized) return NextResponse.json({ error: error || 'Insufficient permissions to update products' }, { status: 403 });
-    
+    const { authorized, user, error } = await checkPermission(
+      "inventory",
+      "edit",
+    );
+    if (!authorized)
+      return NextResponse.json(
+        { error: error || "Insufficient permissions to update products" },
+        { status: 403 },
+      );
+
     const session = await getServerSession(authOptions);
     await connectDB();
 
     const { id } = params;
     const body = await request.json();
-    
-    // Extract variation fields
-    const { country, sku, name, description, type, vendorId, stock, unitCost, currency, listingUrl, hasVariations, variations } = body;
+
+    const {
+      country,
+      sku,
+      name,
+      description,
+      type,
+      vendorId,
+      stock,
+      unitCost,
+      currency,
+      listingUrl,
+      hasVariations,
+      variations,
+    } = body;
 
     if (!sku || !name || !vendorId) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 },
+      );
     }
 
     const adminId = session.user.adminId || session.user.id;
     const product = await Product.findOne({ _id: id, adminId });
 
-    if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+    if (!product) {
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    }
+
+    // NEW: WooCommerce-style accurate aggregation of stock
+    const calculatedStock =
+      hasVariations && variations?.length > 0
+        ? variations.reduce((sum, v) => sum + (Number(v.stock) || 0), 0)
+        : Number(stock) || 0;
 
     product.country = country;
     product.sku = sku;
@@ -36,22 +66,33 @@ export async function PUT(request, { params }) {
     product.description = description;
     product.type = type;
     product.vendorId = vendorId;
-    product.stock = stock || 0;
-    product.unitCost = unitCost || 0;
-    product.currency = currency || 'USD';
+    product.stock = calculatedStock;
+    product.unitCost = Number(unitCost) || 0;
+    product.currency = currency || "USD";
     product.listingUrl = listingUrl;
-    
-    // Save variation data
+
     product.hasVariations = hasVariations || false;
     product.variations = variations || [];
-    
+
     product.updatedAt = new Date();
 
     await product.save();
 
-    return NextResponse.json({ message: 'Product updated successfully', product }, { status: 200 });
+    return NextResponse.json(
+      { message: "Product updated successfully", product },
+      { status: 200 },
+    );
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    if (error.code === 11000) {
+      return NextResponse.json(
+        { error: "A product with this SKU already exists" },
+        { status: 400 },
+      );
+    }
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }
 

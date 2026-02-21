@@ -96,7 +96,6 @@ function InventoryContent() {
     variations: [],
   });
 
-  // Country to currency mapping
   const countryCurrencyMap = {
     USA: "USD",
     US: "USD",
@@ -137,7 +136,6 @@ function InventoryContent() {
   useEffect(() => {
     fetchProducts();
     fetchVendors();
-
     const vendorParam = searchParams.get("vendor");
     if (vendorParam) {
       setSelectedVendor(vendorParam);
@@ -177,7 +175,26 @@ function InventoryContent() {
     });
   };
 
+  // --- UPDATED V1, V2 SEQUENTIAL AUTO-SKU LOGIC ---
   const addVariation = () => {
+    const mainSku = formData.sku;
+
+    // Find the highest existing V-number to avoid duplicates if one gets deleted
+    let maxV = 0;
+    if (mainSku) {
+      formData.variations.forEach((v) => {
+        // Look for pattern "-V1", "-V2", etc.
+        const match = v.sku.match(new RegExp(`${mainSku}-V(\\d+)`));
+        if (match && match[1]) {
+          const num = parseInt(match[1], 10);
+          if (num > maxV) maxV = num;
+        }
+      });
+    }
+
+    const nextIndex = maxV + 1;
+    const defaultSku = mainSku ? `${mainSku}-V${nextIndex}` : "";
+
     setFormData({
       ...formData,
       variations: [
@@ -185,9 +202,9 @@ function InventoryContent() {
         {
           name: "",
           value: "",
-          sku: "",
+          sku: defaultSku,
           stock: 0,
-          unitCost: formData.unitCost || 0,
+          unitCost: Number(formData.unitCost) || 0,
         },
       ],
     });
@@ -196,13 +213,34 @@ function InventoryContent() {
   const updateVariation = (index, field, value) => {
     const newVariations = [...formData.variations];
     newVariations[index][field] = value;
-    setFormData({ ...formData, variations: newVariations });
+
+    let newFormData = { ...formData, variations: newVariations };
+
+    // Real-time Stock Aggregation: updates base stock when a variation's stock changes
+    if (field === "stock") {
+      newFormData.stock = newVariations.reduce(
+        (sum, v) => sum + (Number(v.stock) || 0),
+        0,
+      );
+    }
+
+    setFormData(newFormData);
   };
 
   const removeVariation = (index) => {
     const newVariations = formData.variations.filter((_, i) => i !== index);
-    setFormData({ ...formData, variations: newVariations });
+    // Real-time Stock Aggregation: updates base stock when a variation is deleted
+    const newTotalStock = newVariations.reduce(
+      (sum, v) => sum + (Number(v.stock) || 0),
+      0,
+    );
+    setFormData({
+      ...formData,
+      variations: newVariations,
+      stock: newTotalStock,
+    });
   };
+  // ------------------------------------------------------------
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -252,7 +290,6 @@ function InventoryContent() {
     }
   };
 
-  // --- UPDATED WOOCOMMERCE STYLE CSV EXPORT ---
   const generateCSVFromProducts = (productsToExport) => {
     let csv =
       "Country,SKU,Name,Description,Type,Vendor,Stock,Unit Cost,Listing URL,Parent SKU\n";
@@ -261,12 +298,10 @@ function InventoryContent() {
       const isVariable =
         product.hasVariations && product.variations?.length > 0;
 
-      // Calculate parent stock (sum of variations if variable)
       const parentStock = isVariable
         ? product.variations.reduce((sum, v) => sum + (v.stock || 0), 0)
         : product.stock || 0;
 
-      // 1. Export Parent Row
       const row = [
         product.country || "",
         product.sku || "",
@@ -277,24 +312,23 @@ function InventoryContent() {
         parentStock,
         product.unitCost || 0,
         product.listingUrl || "",
-        "", // Parent SKU column is empty for the parent itself
+        "",
       ].join(",");
       csv += row + "\n";
 
-      // 2. Export Variation Rows
       if (isVariable) {
         product.variations.forEach((v) => {
           const varRow = [
             product.country || "",
-            v.sku || "", // Specific Variation SKU
-            `"${product.name} - ${v.name}: ${v.value}"`, // E.g., "T-Shirt - Color: Red"
+            v.sku || "",
+            `"${product.name} - ${v.name}: ${v.value}"`,
             `"Variation of ${product.sku}"`,
             "variation",
             `"${(product.vendorId?.name || "").replace(/"/g, '""')}"`,
             v.stock || 0,
             v.unitCost || 0,
             product.listingUrl || "",
-            product.sku, // Maps back to parent SKU
+            product.sku,
           ].join(",");
           csv += varRow + "\n";
         });
@@ -314,8 +348,6 @@ function InventoryContent() {
         const blob = new Blob([csv], { type: "text/csv" });
         url = window.URL.createObjectURL(blob);
       } else {
-        // If they click download all, we generate it locally to ensure variations are exported properly
-        // using the new WordPress logic rather than the generic backend route.
         const csv = generateCSVFromProducts(products);
         const blob = new Blob([csv], { type: "text/csv" });
         url = window.URL.createObjectURL(blob);
@@ -355,6 +387,13 @@ function InventoryContent() {
     const detectedCurrency =
       product.currency || countryCurrencyMap[product.country] || "USD";
     setCurrency(detectedCurrency);
+
+    // Ensure base stock is visually accurate when editing
+    const computedStock =
+      product.hasVariations && product.variations?.length > 0
+        ? product.variations.reduce((sum, v) => sum + (v.stock || 0), 0)
+        : product.stock || 0;
+
     setFormData({
       country: product.country || "",
       sku: product.sku || "",
@@ -362,7 +401,7 @@ function InventoryContent() {
       description: product.description || "",
       type: product.type || "",
       vendorId: product.vendorId?._id || "",
-      stock: product.stock || 0,
+      stock: computedStock,
       unitCost: product.unitCost || 0,
       listingUrl: product.listingUrl || "",
       currency: detectedCurrency,
@@ -439,7 +478,6 @@ function InventoryContent() {
       toast.error("No products selected");
       return;
     }
-
     const confirmMessage = `Are you sure you want to delete ${selectedProducts.length} product(s)? This action cannot be undone.`;
     if (!window.confirm(confirmMessage)) return;
 
@@ -449,9 +487,7 @@ function InventoryContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ productIds: selectedProducts }),
       });
-
       const data = await response.json();
-
       if (response.ok) {
         toast.success(data.message || "Products deleted successfully!");
         setSelectedProducts([]);
@@ -559,7 +595,6 @@ function InventoryContent() {
     return <Badge variant="success">In</Badge>;
   };
 
-  // Helper to format Cost display for variations (shows a range if prices differ)
   const getProductCostDisplay = (product) => {
     if (product.hasVariations && product.variations?.length > 0) {
       const costs = product.variations.map((v) => v.unitCost || 0);
@@ -678,7 +713,6 @@ function InventoryContent() {
                       Add Product
                     </Button>
                   </DialogTrigger>
-                  {/* WIDER DIALOG FOR BETTER VISIBILITY */}
                   <DialogContent className="max-w-[95vw] md:max-w-5xl max-h-[90vh] overflow-y-auto">
                     <form onSubmit={handleSubmit}>
                       <DialogHeader>
@@ -797,7 +831,17 @@ function InventoryContent() {
                               value={formData.stock}
                               onChange={handleChange}
                               disabled={formData.hasVariations}
+                              className={
+                                formData.hasVariations
+                                  ? "bg-muted font-bold text-primary"
+                                  : ""
+                              }
                             />
+                            {formData.hasVariations && (
+                              <p className="text-[10px] text-muted-foreground">
+                                Auto-calculated from variations
+                              </p>
+                            )}
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor="unitCost">
@@ -826,18 +870,23 @@ function InventoryContent() {
                           />
                         </div>
 
-                        {/* --- VARIATIONS UI ADD PRODUCT --- */}
                         <div className="flex items-center space-x-2 py-4 border-t mt-4">
                           <Checkbox
                             id="hasVariations"
                             checked={formData.hasVariations}
-                            onCheckedChange={(checked) =>
+                            onCheckedChange={(checked) => {
+                              const aggregatedStock = checked
+                                ? formData.variations.reduce(
+                                    (sum, v) => sum + (Number(v.stock) || 0),
+                                    0,
+                                  )
+                                : formData.stock;
                               setFormData({
                                 ...formData,
                                 hasVariations: checked,
-                                stock: checked ? 0 : formData.stock,
-                              })
-                            }
+                                stock: aggregatedStock,
+                              });
+                            }}
                           />
                           <Label
                             htmlFor="hasVariations"
@@ -872,7 +921,6 @@ function InventoryContent() {
                               </p>
                             ) : (
                               <div className="space-y-2">
-                                {/* Header Row for wide screens */}
                                 <div className="hidden md:grid grid-cols-12 gap-2 px-2 text-xs font-semibold text-muted-foreground">
                                   <div className="col-span-2">
                                     Type (e.g. Size)
@@ -942,7 +990,7 @@ function InventoryContent() {
                                             e.target.value,
                                           )
                                         }
-                                        placeholder="PROD-RED"
+                                        placeholder="PROD-V1"
                                       />
                                     </div>
                                     <div className="space-y-1 col-span-1 md:col-span-2">
@@ -951,7 +999,11 @@ function InventoryContent() {
                                       </Label>
                                       <Input
                                         type="number"
-                                        value={varItem.stock || 0}
+                                        value={
+                                          varItem.stock === undefined
+                                            ? 0
+                                            : varItem.stock
+                                        }
                                         onChange={(e) =>
                                           updateVariation(
                                             idx,
@@ -1126,7 +1178,17 @@ function InventoryContent() {
                               value={formData.stock}
                               onChange={handleChange}
                               disabled={formData.hasVariations}
+                              className={
+                                formData.hasVariations
+                                  ? "bg-muted font-bold text-primary"
+                                  : ""
+                              }
                             />
+                            {formData.hasVariations && (
+                              <p className="text-[10px] text-muted-foreground">
+                                Auto-calculated from variations
+                              </p>
+                            )}
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor="edit-unitCost">Base Cost</Label>
@@ -1152,18 +1214,23 @@ function InventoryContent() {
                           />
                         </div>
 
-                        {/* --- VARIATIONS UI EDIT PRODUCT --- */}
                         <div className="flex items-center space-x-2 py-4 border-t mt-4">
                           <Checkbox
                             id="edit-hasVariations"
                             checked={formData.hasVariations}
-                            onCheckedChange={(checked) =>
+                            onCheckedChange={(checked) => {
+                              const aggregatedStock = checked
+                                ? formData.variations.reduce(
+                                    (sum, v) => sum + (Number(v.stock) || 0),
+                                    0,
+                                  )
+                                : formData.stock;
                               setFormData({
                                 ...formData,
                                 hasVariations: checked,
-                                stock: checked ? 0 : formData.stock,
-                              })
-                            }
+                                stock: aggregatedStock,
+                              });
+                            }}
                           />
                           <Label
                             htmlFor="edit-hasVariations"
@@ -1267,7 +1334,7 @@ function InventoryContent() {
                                             e.target.value,
                                           )
                                         }
-                                        placeholder="PROD-RED"
+                                        placeholder="PROD-V1"
                                       />
                                     </div>
                                     <div className="space-y-1 col-span-1 md:col-span-2">
@@ -1276,7 +1343,11 @@ function InventoryContent() {
                                       </Label>
                                       <Input
                                         type="number"
-                                        value={varItem.stock || 0}
+                                        value={
+                                          varItem.stock === undefined
+                                            ? 0
+                                            : varItem.stock
+                                        }
                                         onChange={(e) =>
                                           updateVariation(
                                             idx,
@@ -1505,12 +1576,14 @@ function InventoryContent() {
                         const isVariable =
                           product.hasVariations &&
                           product.variations?.length > 0;
+
                         const totalStock = isVariable
                           ? product.variations.reduce(
                               (sum, v) => sum + (v.stock || 0),
                               0,
                             )
                           : product.stock || 0;
+
                         const totalValue = isVariable
                           ? product.variations.reduce(
                               (sum, v) =>
@@ -1797,7 +1870,7 @@ function InventoryContent() {
                       {filteredProducts.reduce(
                         (sum, p) =>
                           sum +
-                          (p.hasVariations && p.variations
+                          (p.hasVariations && p.variations?.length > 0
                             ? p.variations.reduce(
                                 (vSum, v) => vSum + (v.stock || 0),
                                 0,
@@ -1816,7 +1889,7 @@ function InventoryContent() {
                         filteredProducts.reduce(
                           (sum, p) =>
                             sum +
-                            (p.hasVariations && p.variations
+                            (p.hasVariations && p.variations?.length > 0
                               ? p.variations.reduce(
                                   (vSum, v) =>
                                     vSum + (v.stock || 0) * (v.unitCost || 0),
@@ -1837,12 +1910,12 @@ function InventoryContent() {
                       {
                         filteredProducts.filter((p) => {
                           const totalStock =
-                            p.hasVariations && p.variations
+                            p.hasVariations && p.variations?.length > 0
                               ? p.variations.reduce(
                                   (sum, v) => sum + (v.stock || 0),
                                   0,
                                 )
-                              : p.stock;
+                              : p.stock || 0;
                           return totalStock === 0;
                         }).length
                       }
