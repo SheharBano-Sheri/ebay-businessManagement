@@ -16,6 +16,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import {
   Users,
@@ -27,6 +28,8 @@ import {
   CheckCheck,
   Shield,
   RefreshCw,
+  Trash2,
+  Search,
 } from "lucide-react";
 import {
   Table,
@@ -54,6 +57,8 @@ export default function MasterAdminDashboard() {
   const [users, setUsers] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [selectedAction, setSelectedAction] = useState(null);
+  const [userSearchTerm, setUserSearchTerm] = useState("");
+  const [vendorSearchTerm, setVendorSearchTerm] = useState("");
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -210,6 +215,48 @@ export default function MasterAdminDashboard() {
     setSelectedAction(null);
   };
 
+  const handleDeleteUser = async (userId) => {
+    try {
+      const response = await fetch(`/api/admin/users/${userId}/delete`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success("User deleted successfully");
+        fetchData();
+      } else {
+        toast.error(data.error || "Failed to delete user");
+      }
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      toast.error("Failed to delete user");
+    }
+    setSelectedAction(null);
+  };
+
+  const handleDeleteVendor = async (vendorId) => {
+    try {
+      const response = await fetch(`/api/admin/vendors/${vendorId}/delete`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success("Vendor deleted successfully");
+        fetchData();
+      } else {
+        toast.error(data.error || "Failed to delete vendor");
+      }
+    } catch (error) {
+      console.error("Error deleting vendor:", error);
+      toast.error("Failed to delete vendor");
+    }
+    setSelectedAction(null);
+  };
+
   const getPlanBadge = (plan, approvalStatus) => {
     const safePlan = plan || "personal";
     const planColors = {
@@ -268,6 +315,26 @@ export default function MasterAdminDashboard() {
   );
 
   const pendingVendors = vendors.filter((v) => v.approvalStatus === "pending");
+
+  // Search filter
+  const filteredUsers = users.filter((user) => {
+    const searchLower = userSearchTerm.toLowerCase();
+    return (
+      user.name?.toLowerCase().includes(searchLower) ||
+      user.email?.toLowerCase().includes(searchLower) ||
+      user.role?.toLowerCase().includes(searchLower) ||
+      user.membershipPlan?.toLowerCase().includes(searchLower)
+    );
+  });
+
+  const filteredVendors = vendors.filter((vendor) => {
+    const searchLower = vendorSearchTerm.toLowerCase();
+    return (
+      vendor.name?.toLowerCase().includes(searchLower) ||
+      vendor.email?.toLowerCase().includes(searchLower) ||
+      vendor.vendorType?.toLowerCase().includes(searchLower)
+    );
+  });
 
   return (
     <SidebarProvider>
@@ -384,6 +451,17 @@ export default function MasterAdminDashboard() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
+                      <div className="mb-4">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            placeholder="Search users by name, email, role, or plan..."
+                            value={userSearchTerm}
+                            onChange={(e) => setUserSearchTerm(e.target.value)}
+                            className="pl-10"
+                          />
+                        </div>
+                      </div>
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -396,17 +474,17 @@ export default function MasterAdminDashboard() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {users.length === 0 ? (
+                          {filteredUsers.length === 0 ? (
                             <TableRow>
                               <TableCell
                                 colSpan={6}
                                 className="text-center text-muted-foreground"
                               >
-                                No users found
+                                {userSearchTerm ? "No users match your search" : "No users found"}
                               </TableCell>
                             </TableRow>
                           ) : (
-                            users.map((user) => (
+                            filteredUsers.map((user) => (
                               <TableRow key={user._id}>
                                 <TableCell className="font-medium">
                                   {user.name}
@@ -460,35 +538,51 @@ export default function MasterAdminDashboard() {
                                     )}
                                     {user.role !== "master_admin" &&
                                       user.planApprovalStatus !== "pending" && (
-                                        <Button
-                                          size="sm"
-                                          variant={
-                                            user.isActive
-                                              ? "outline"
-                                              : "default"
-                                          }
-                                          onClick={() =>
-                                            setSelectedAction({
-                                              type: user.isActive
-                                                ? "block"
-                                                : "unblock",
-                                              userId: user._id,
-                                              userName: user.name,
-                                            })
-                                          }
-                                        >
-                                          {user.isActive ? (
-                                            <>
-                                              <Ban className="h-4 w-4 mr-1" />
-                                              Block
-                                            </>
-                                          ) : (
-                                            <>
-                                              <CheckCheck className="h-4 w-4 mr-1" />
-                                              Unblock
-                                            </>
-                                          )}
-                                        </Button>
+                                        <>
+                                          <Button
+                                            size="sm"
+                                            variant={
+                                              user.isActive
+                                                ? "outline"
+                                                : "default"
+                                            }
+                                            onClick={() =>
+                                              setSelectedAction({
+                                                type: user.isActive
+                                                  ? "block"
+                                                  : "unblock",
+                                                userId: user._id,
+                                                userName: user.name,
+                                              })
+                                            }
+                                          >
+                                            {user.isActive ? (
+                                              <>
+                                                <Ban className="h-4 w-4 mr-1" />
+                                                Block
+                                              </>
+                                            ) : (
+                                              <>
+                                                <CheckCheck className="h-4 w-4 mr-1" />
+                                                Unblock
+                                              </>
+                                            )}
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            onClick={() =>
+                                              setSelectedAction({
+                                                type: "delete-user",
+                                                userId: user._id,
+                                                userName: user.name,
+                                              })
+                                            }
+                                          >
+                                            <Trash2 className="h-4 w-4 mr-1" />
+                                            Delete
+                                          </Button>
+                                        </>
                                       )}
                                   </div>
                                 </TableCell>
@@ -510,6 +604,17 @@ export default function MasterAdminDashboard() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
+                      <div className="mb-4">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            placeholder="Search vendors by name, email, or type..."
+                            value={vendorSearchTerm}
+                            onChange={(e) => setVendorSearchTerm(e.target.value)}
+                            className="pl-10"
+                          />
+                        </div>
+                      </div>
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -522,17 +627,17 @@ export default function MasterAdminDashboard() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {vendors.length === 0 ? (
+                          {filteredVendors.length === 0 ? (
                             <TableRow>
                               <TableCell
                                 colSpan={6}
                                 className="text-center text-muted-foreground"
                               >
-                                No vendors found
+                                {vendorSearchTerm ? "No vendors match your search" : "No vendors found"}
                               </TableCell>
                             </TableRow>
                           ) : (
-                            vendors.map((vendor) => (
+                            filteredVendors.map((vendor) => (
                               <TableRow key={vendor._id}>
                                 <TableCell className="font-medium">
                                   {vendor.name}
@@ -635,6 +740,20 @@ export default function MasterAdminDashboard() {
                                         )}
                                       </Button>
                                     )}
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      onClick={() =>
+                                        setSelectedAction({
+                                          type: "delete-vendor",
+                                          vendorId: vendor._id,
+                                          vendorName: vendor.name,
+                                        })
+                                      }
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-1" />
+                                      Delete
+                                    </Button>
                                   </div>
                                 </TableCell>
                               </TableRow>
@@ -661,6 +780,7 @@ export default function MasterAdminDashboard() {
                       {selectedAction?.type === "reject" && "Reject User Plan"}
                       {selectedAction?.type === "block" && "Block User"}
                       {selectedAction?.type === "unblock" && "Unblock User"}
+                      {selectedAction?.type === "delete-user" && "Delete User"}
 
                       {/* Vendors Titles */}
                       {selectedAction?.type === "approve-vendor" &&
@@ -671,6 +791,7 @@ export default function MasterAdminDashboard() {
                         (selectedAction.isBlock
                           ? "Block Vendor"
                           : "Reject Vendor")}
+                      {selectedAction?.type === "delete-vendor" && "Delete Vendor"}
                     </AlertDialogTitle>
                     <AlertDialogDescription>
                       {/* User Descriptions */}
@@ -682,12 +803,16 @@ export default function MasterAdminDashboard() {
                         `Are you sure you want to block ${selectedAction.userName}? They will lose access to their account.`}
                       {selectedAction?.type === "unblock" &&
                         `Are you sure you want to unblock ${selectedAction.userName}? They will regain access to their account.`}
+                      {selectedAction?.type === "delete-user" &&
+                        `Are you sure you want to permanently delete ${selectedAction.userName}? This action cannot be undone and will remove all their data.`}
 
                       {/* Vendor Descriptions */}
                       {selectedAction?.type === "approve-vendor" &&
                         `Are you sure you want to ${selectedAction.isReactivation ? "reactivate" : "approve"} ${selectedAction.vendorName}? They will gain access to the vendor portal.`}
                       {selectedAction?.type === "reject-vendor" &&
                         `Are you sure you want to ${selectedAction.isBlock ? "block" : "reject"} ${selectedAction.vendorName}? They will not be able to access the vendor portal.`}
+                      {selectedAction?.type === "delete-vendor" &&
+                        `Are you sure you want to permanently delete ${selectedAction.vendorName}? This action cannot be undone and will remove all their data.`}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -695,7 +820,8 @@ export default function MasterAdminDashboard() {
                     <AlertDialogAction
                       className={
                         selectedAction?.type.includes("reject") ||
-                        selectedAction?.type === "block"
+                        selectedAction?.type === "block" ||
+                        selectedAction?.type.includes("delete")
                           ? "bg-red-600 hover:bg-red-700"
                           : ""
                       }
@@ -708,10 +834,14 @@ export default function MasterAdminDashboard() {
                           handleBlockUser(selectedAction.userId, true);
                         } else if (selectedAction?.type === "unblock") {
                           handleBlockUser(selectedAction.userId, false);
+                        } else if (selectedAction?.type === "delete-user") {
+                          handleDeleteUser(selectedAction.userId);
                         } else if (selectedAction?.type === "approve-vendor") {
                           handleApproveVendor(selectedAction.vendorId);
                         } else if (selectedAction?.type === "reject-vendor") {
                           handleRejectVendor(selectedAction.vendorId);
+                        } else if (selectedAction?.type === "delete-vendor") {
+                          handleDeleteVendor(selectedAction.vendorId);
                         }
                       }}
                     >
