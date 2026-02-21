@@ -211,6 +211,7 @@ export async function POST(request) {
       images,
       listingUrl,
       hasVariations,
+      variationTypes,
       variations,
     } = body;
 
@@ -259,7 +260,6 @@ export async function POST(request) {
       approvalStatus = "approved";
     }
 
-    // NEW: WooCommerce-style accurate aggregation of stock
     const calculatedStock =
       hasVariations && variations?.length > 0
         ? variations.reduce((sum, v) => sum + (Number(v.stock) || 0), 0)
@@ -281,6 +281,7 @@ export async function POST(request) {
       images: images || [],
       isActive: true,
       hasVariations: hasVariations || false,
+      variationTypes: variationTypes || ["Color"],
       variations: variations || [],
       approvalStatus,
       isApproved,

@@ -53,6 +53,7 @@ import {
   MoreVertical,
   ChevronDown,
   ChevronUp,
+  X,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -93,6 +94,7 @@ function InventoryContent() {
     listingUrl: "",
     currency: "USD",
     hasVariations: false,
+    variationTypes: ["Color"], // Default attribute option
     variations: [],
   });
 
@@ -175,16 +177,61 @@ function InventoryContent() {
     });
   };
 
-  // --- UPDATED V1, V2 SEQUENTIAL AUTO-SKU LOGIC ---
+  // --- MULTI-ATTRIBUTE VARIATION LOGIC ---
+  const addVariationType = () => {
+    const newType = `Option ${formData.variationTypes.length + 1}`;
+    setFormData({
+      ...formData,
+      variationTypes: [...formData.variationTypes, newType],
+    });
+  };
+
+  const updateVariationType = (index, newName) => {
+    const oldName = formData.variationTypes[index];
+    const newTypes = [...formData.variationTypes];
+    newTypes[index] = newName;
+
+    const newVariations = formData.variations.map((v) => {
+      const attrs = { ...(v.attributes || {}) };
+      if (attrs[oldName] !== undefined) {
+        attrs[newName] = attrs[oldName];
+        delete attrs[oldName];
+      }
+      return { ...v, attributes: attrs };
+    });
+
+    setFormData({
+      ...formData,
+      variationTypes: newTypes,
+      variations: newVariations,
+    });
+  };
+
+  const removeVariationType = (index) => {
+    const oldName = formData.variationTypes[index];
+    const newTypes = formData.variationTypes.filter((_, i) => i !== index);
+
+    const newVariations = formData.variations.map((v) => {
+      const attrs = { ...(v.attributes || {}) };
+      delete attrs[oldName];
+      return { ...v, attributes: attrs };
+    });
+
+    setFormData({
+      ...formData,
+      variationTypes: newTypes,
+      variations: newVariations,
+    });
+  };
+
   const addVariation = () => {
     const mainSku = formData.sku;
 
-    // Find the highest existing V-number to avoid duplicates if one gets deleted
+    // Auto Sequence V1, V2 mapping logic
     let maxV = 0;
     if (mainSku) {
       formData.variations.forEach((v) => {
-        // Look for pattern "-V1", "-V2", etc.
-        const match = v.sku.match(new RegExp(`${mainSku}-V(\\d+)`));
+        const match = v.sku?.match(new RegExp(`${mainSku}-V(\\d+)`));
         if (match && match[1]) {
           const num = parseInt(match[1], 10);
           if (num > maxV) maxV = num;
@@ -200,8 +247,7 @@ function InventoryContent() {
       variations: [
         ...formData.variations,
         {
-          name: "",
-          value: "",
+          attributes: {},
           sku: defaultSku,
           stock: 0,
           unitCost: Number(formData.unitCost) || 0,
@@ -210,26 +256,29 @@ function InventoryContent() {
     });
   };
 
+  const updateVariationAttribute = (index, typeName, value) => {
+    const newVariations = [...formData.variations];
+    if (!newVariations[index].attributes) newVariations[index].attributes = {};
+    newVariations[index].attributes[typeName] = value;
+    setFormData({ ...formData, variations: newVariations });
+  };
+
   const updateVariation = (index, field, value) => {
     const newVariations = [...formData.variations];
     newVariations[index][field] = value;
-
     let newFormData = { ...formData, variations: newVariations };
 
-    // Real-time Stock Aggregation: updates base stock when a variation's stock changes
     if (field === "stock") {
       newFormData.stock = newVariations.reduce(
         (sum, v) => sum + (Number(v.stock) || 0),
         0,
       );
     }
-
     setFormData(newFormData);
   };
 
   const removeVariation = (index) => {
     const newVariations = formData.variations.filter((_, i) => i !== index);
-    // Real-time Stock Aggregation: updates base stock when a variation is deleted
     const newTotalStock = newVariations.reduce(
       (sum, v) => sum + (Number(v.stock) || 0),
       0,
@@ -239,6 +288,19 @@ function InventoryContent() {
       variations: newVariations,
       stock: newTotalStock,
     });
+  };
+
+  // Helper to cleanly display multi-attributes in rows & export
+  const getVariationLabel = (v) => {
+    if (v.attributes && Object.keys(v.attributes).length > 0) {
+      return Object.entries(v.attributes)
+        .map(
+          ([key, val]) =>
+            `<span class="text-muted-foreground">${key}:</span> ${val}`,
+        )
+        .join(" | ");
+    }
+    return `${v.name || "Option"}: ${v.value || "-"}`; // Fallback for legacy
   };
   // ------------------------------------------------------------
 
@@ -267,6 +329,7 @@ function InventoryContent() {
           listingUrl: "",
           currency: "USD",
           hasVariations: false,
+          variationTypes: ["Color"],
           variations: [],
         });
         await fetchProducts();
@@ -297,7 +360,6 @@ function InventoryContent() {
     productsToExport.forEach((product) => {
       const isVariable =
         product.hasVariations && product.variations?.length > 0;
-
       const parentStock = isVariable
         ? product.variations.reduce((sum, v) => sum + (v.stock || 0), 0)
         : product.stock || 0;
@@ -318,10 +380,17 @@ function InventoryContent() {
 
       if (isVariable) {
         product.variations.forEach((v) => {
+          const varStr =
+            v.attributes && Object.keys(v.attributes).length > 0
+              ? Object.entries(v.attributes)
+                  .map(([key, val]) => `${key}: ${val}`)
+                  .join(", ")
+              : `${v.name}: ${v.value}`;
+
           const varRow = [
             product.country || "",
             v.sku || "",
-            `"${product.name} - ${v.name}: ${v.value}"`,
+            `"${product.name} - ${varStr}"`,
             `"Variation of ${product.sku}"`,
             "variation",
             `"${(product.vendorId?.name || "").replace(/"/g, '""')}"`,
@@ -388,11 +457,23 @@ function InventoryContent() {
       product.currency || countryCurrencyMap[product.country] || "USD";
     setCurrency(detectedCurrency);
 
-    // Ensure base stock is visually accurate when editing
     const computedStock =
       product.hasVariations && product.variations?.length > 0
         ? product.variations.reduce((sum, v) => sum + (v.stock || 0), 0)
         : product.stock || 0;
+
+    // Migration compatibility handling for old simple string variations
+    let vTypes = product.variationTypes || [];
+    let vars = product.variations || [];
+    if (vTypes.length === 0 && vars.length > 0 && vars[0].name) {
+      vTypes = [vars[0].name];
+      vars = vars.map((v) => ({
+        ...v,
+        attributes: v.attributes || { [vars[0].name]: v.value },
+      }));
+    } else if (vTypes.length === 0) {
+      vTypes = ["Color"];
+    }
 
     setFormData({
       country: product.country || "",
@@ -406,7 +487,8 @@ function InventoryContent() {
       listingUrl: product.listingUrl || "",
       currency: detectedCurrency,
       hasVariations: product.hasVariations || false,
-      variations: product.variations || [],
+      variationTypes: vTypes,
+      variations: vars,
     });
     setIsEditDialogOpen(true);
   };
@@ -437,6 +519,7 @@ function InventoryContent() {
           listingUrl: "",
           currency: "USD",
           hasVariations: false,
+          variationTypes: ["Color"],
           variations: [],
         });
         fetchProducts();
@@ -465,21 +548,21 @@ function InventoryContent() {
         setDeleteConfirmOpen(false);
         setProductToDelete(null);
         fetchProducts();
-      } else {
-        toast.error(data.error || "Failed to delete product");
-      }
+      } else toast.error(data.error || "Failed to delete product");
     } catch (error) {
       toast.error("An error occurred while deleting product");
     }
   };
 
   const handleBulkDelete = async () => {
-    if (selectedProducts.length === 0) {
-      toast.error("No products selected");
+    if (selectedProducts.length === 0)
+      return toast.error("No products selected");
+    if (
+      !window.confirm(
+        `Are you sure you want to delete ${selectedProducts.length} product(s)? This action cannot be undone.`,
+      )
+    )
       return;
-    }
-    const confirmMessage = `Are you sure you want to delete ${selectedProducts.length} product(s)? This action cannot be undone.`;
-    if (!window.confirm(confirmMessage)) return;
 
     try {
       const response = await fetch("/api/products/bulk-delete", {
@@ -492,9 +575,7 @@ function InventoryContent() {
         toast.success(data.message || "Products deleted successfully!");
         setSelectedProducts([]);
         fetchProducts();
-      } else {
-        toast.error(data.error || "Failed to delete products");
-      }
+      } else toast.error(data.error || "Failed to delete products");
     } catch (error) {
       toast.error("An error occurred while deleting products");
     }
@@ -514,9 +595,7 @@ function InventoryContent() {
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
         toast.success("Template downloaded successfully!");
-      } else {
-        toast.error("Failed to download template");
-      }
+      } else toast.error("Failed to download template");
     } catch (error) {
       toast.error("An error occurred while downloading template");
     }
@@ -525,24 +604,21 @@ function InventoryContent() {
   const handleUploadCSV = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.name.endsWith(".csv")) {
-      toast.error("Please upload a CSV file");
-      return;
-    }
+    if (!file.name.endsWith(".csv"))
+      return toast.error("Please upload a CSV file");
     const loadingToast = toast.loading("Uploading CSV file...");
     try {
       setUploadingCSV(true);
-      const formData = new FormData();
-      formData.append("file", file);
+      const formDataObj = new FormData();
+      formDataObj.append("file", file);
       const response = await fetch("/api/products/upload", {
         method: "POST",
-        body: formData,
+        body: formDataObj,
       });
       if (!response.ok) {
         const errorText = await response.text();
         toast.dismiss(loadingToast);
-        toast.error(`Upload failed: ${response.status} - ${errorText}`);
-        return;
+        return toast.error(`Upload failed: ${response.status} - ${errorText}`);
       }
       const data = await response.json();
       toast.dismiss(loadingToast);
@@ -551,12 +627,10 @@ function InventoryContent() {
           const summary = data.results.summary;
           toast.success(
             `Upload complete! ${summary.created} created, ${summary.updated} updated${summary.failed > 0 ? `, ${summary.failed} failed` : ""}`,
-            { duration: 6000 },
           );
         } else {
           toast.success(data.message || "CSV uploaded successfully!");
         }
-
         if (
           data.results &&
           data.results.errors &&
@@ -565,14 +639,11 @@ function InventoryContent() {
           const errorPreview = data.results.errors.slice(0, 3).join("; ");
           toast.warning(
             `Some rows had errors: ${errorPreview}${data.results.errors.length > 3 ? "..." : ""}`,
-            { duration: 8000 },
           );
         }
         await fetchProducts();
         await fetchVendors();
-      } else {
-        toast.error(data.error || "Failed to upload CSV");
-      }
+      } else toast.error(data.error || "Failed to upload CSV");
     } catch (error) {
       toast.dismiss(loadingToast);
       toast.error("An error occurred while uploading CSV: " + error.message);
@@ -600,9 +671,7 @@ function InventoryContent() {
       const costs = product.variations.map((v) => v.unitCost || 0);
       const minCost = Math.min(...costs);
       const maxCost = Math.max(...costs);
-      if (minCost === maxCost) {
-        return minCost.toFixed(2);
-      }
+      if (minCost === maxCost) return minCost.toFixed(2);
       return `${minCost.toFixed(2)} - ${maxCost.toFixed(2)}`;
     }
     return (product.unitCost || 0).toFixed(2);
@@ -620,6 +689,10 @@ function InventoryContent() {
   });
 
   const uniqueTypes = [...new Set(products.map((p) => p.type).filter(Boolean))];
+
+  // Dynamic CSS Grid Layout for Variations Form
+  const varTypesCount = formData.variationTypes?.length || 1;
+  const gridCols = `repeat(${varTypesCount}, minmax(0, 1fr)) 2fr 1fr 1fr 40px`;
 
   return (
     <SidebarProvider
@@ -662,16 +735,15 @@ function InventoryContent() {
                       size="sm"
                       onClick={handleBulkDelete}
                     >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete Selected ({selectedProducts.length})
+                      <Trash2 className="mr-2 h-4 w-4" /> Delete Selected (
+                      {selectedProducts.length})
                     </Button>
                   </>
                 )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm">
-                      <MoreVertical className="mr-2 h-4 w-4" />
-                      Actions
+                      <MoreVertical className="mr-2 h-4 w-4" /> Actions
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
@@ -682,13 +754,12 @@ function InventoryContent() {
                         : "Download All CSV"}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleDownloadTemplate}>
-                      <FileDown className="mr-2 h-4 w-4" />
-                      Export Template
+                      <FileDown className="mr-2 h-4 w-4" /> Export Template
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => fileInputRef.current?.click()}
                     >
-                      <Upload className="mr-2 h-4 w-4" />
+                      <Upload className="mr-2 h-4 w-4" />{" "}
                       {uploadingCSV ? "Uploading..." : "Upload CSV"}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -703,14 +774,14 @@ function InventoryContent() {
                   disabled={uploadingCSV}
                 />
 
+                {/* --- ADD PRODUCT DIALOG --- */}
                 <Dialog
                   open={isAddDialogOpen}
                   onOpenChange={setIsAddDialogOpen}
                 >
                   <DialogTrigger asChild>
                     <Button size="sm">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add Product
+                      <Plus className="mr-2 h-4 w-4" /> Add Product
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-[95vw] md:max-w-5xl max-h-[90vh] overflow-y-auto">
@@ -892,163 +963,203 @@ function InventoryContent() {
                             htmlFor="hasVariations"
                             className="font-semibold cursor-pointer"
                           >
-                            Product has variations (This will override base
-                            stock)
+                            Product has advanced variations (Multi-attribute
+                            capable)
                           </Label>
                         </div>
 
+                        {/* --- ADVANCED VARIATION MANAGER --- */}
                         {formData.hasVariations && (
-                          <div className="space-y-4 border p-4 rounded-md bg-muted/10">
-                            <div className="flex justify-between items-center">
-                              <Label className="text-md font-semibold text-primary">
-                                Manage Variations
+                          <div className="space-y-6 border p-4 rounded-md bg-muted/10">
+                            <div className="space-y-3 pb-4 border-b">
+                              <Label className="text-sm font-semibold text-primary">
+                                1. Define Variation Options
                               </Label>
-                              <Button
-                                type="button"
-                                size="sm"
-                                onClick={addVariation}
-                              >
-                                <Plus className="h-4 w-4 mr-1" /> Add Variation
-                                Option
-                              </Button>
-                            </div>
-
-                            {formData.variations.length === 0 ? (
-                              <p className="text-sm text-muted-foreground italic text-center py-4 border-2 border-dashed rounded">
-                                No variations added yet. Click 'Add Variation
-                                Option' to start mapping out your sizes, colors,
-                                etc.
+                              <p className="text-xs text-muted-foreground">
+                                Add options that determine variations (e.g.
+                                Color, Size, Material).
                               </p>
-                            ) : (
-                              <div className="space-y-2">
-                                <div className="hidden md:grid grid-cols-12 gap-2 px-2 text-xs font-semibold text-muted-foreground">
-                                  <div className="col-span-2">
-                                    Type (e.g. Size)
-                                  </div>
-                                  <div className="col-span-2">
-                                    Value (e.g. XL)
-                                  </div>
-                                  <div className="col-span-3">
-                                    Variation SKU
-                                  </div>
-                                  <div className="col-span-2">Stock</div>
-                                  <div className="col-span-2">
-                                    Cost ({currency})
-                                  </div>
-                                  <div className="col-span-1 text-center">
-                                    Action
-                                  </div>
-                                </div>
-
-                                {formData.variations.map((varItem, idx) => (
+                              <div className="flex gap-2 items-center flex-wrap">
+                                {formData.variationTypes?.map((type, i) => (
                                   <div
-                                    key={idx}
-                                    className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end bg-background p-3 md:p-2 rounded border shadow-sm"
+                                    key={i}
+                                    className="flex items-center gap-1 bg-secondary border p-1 pl-2 rounded-md"
                                   >
-                                    <div className="space-y-1 col-span-1 md:col-span-2">
-                                      <Label className="text-xs md:hidden">
-                                        Type
-                                      </Label>
-                                      <Input
-                                        value={varItem.name || ""}
-                                        onChange={(e) =>
-                                          updateVariation(
-                                            idx,
-                                            "name",
-                                            e.target.value,
-                                          )
-                                        }
-                                        placeholder="Color"
-                                      />
-                                    </div>
-                                    <div className="space-y-1 col-span-1 md:col-span-2">
-                                      <Label className="text-xs md:hidden">
-                                        Value
-                                      </Label>
-                                      <Input
-                                        value={varItem.value || ""}
-                                        onChange={(e) =>
-                                          updateVariation(
-                                            idx,
-                                            "value",
-                                            e.target.value,
-                                          )
-                                        }
-                                        placeholder="Red"
-                                      />
-                                    </div>
-                                    <div className="space-y-1 col-span-1 md:col-span-3">
-                                      <Label className="text-xs md:hidden">
-                                        Variation SKU
-                                      </Label>
-                                      <Input
-                                        value={varItem.sku || ""}
-                                        onChange={(e) =>
-                                          updateVariation(
-                                            idx,
-                                            "sku",
-                                            e.target.value,
-                                          )
-                                        }
-                                        placeholder="PROD-V1"
-                                      />
-                                    </div>
-                                    <div className="space-y-1 col-span-1 md:col-span-2">
-                                      <Label className="text-xs md:hidden">
-                                        Stock
-                                      </Label>
-                                      <Input
-                                        type="number"
-                                        value={
-                                          varItem.stock === undefined
-                                            ? 0
-                                            : varItem.stock
-                                        }
-                                        onChange={(e) =>
-                                          updateVariation(
-                                            idx,
-                                            "stock",
-                                            Number(e.target.value),
-                                          )
-                                        }
-                                      />
-                                    </div>
-                                    <div className="space-y-1 col-span-1 md:col-span-2">
-                                      <Label className="text-xs md:hidden">
-                                        Cost
-                                      </Label>
-                                      <Input
-                                        type="number"
-                                        step="0.01"
-                                        value={
-                                          varItem.unitCost === undefined
-                                            ? formData.unitCost
-                                            : varItem.unitCost
-                                        }
-                                        onChange={(e) =>
-                                          updateVariation(
-                                            idx,
-                                            "unitCost",
-                                            Number(e.target.value),
-                                          )
-                                        }
-                                      />
-                                    </div>
-                                    <div className="col-span-1 flex justify-end md:justify-center">
-                                      <Button
-                                        type="button"
-                                        variant="destructive"
-                                        size="icon"
-                                        onClick={() => removeVariation(idx)}
-                                        className="h-10 w-10"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
+                                    <Input
+                                      value={type}
+                                      onChange={(e) =>
+                                        updateVariationType(i, e.target.value)
+                                      }
+                                      className="h-7 w-24 text-xs font-semibold border-none bg-transparent focus-visible:ring-0 px-1"
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                      onClick={() => removeVariationType(i)}
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
                                   </div>
                                 ))}
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={addVariationType}
+                                  className="h-8 border-dashed"
+                                >
+                                  <Plus className="h-3 w-3 mr-1" /> Add Option
+                                </Button>
                               </div>
-                            )}
+                            </div>
+
+                            <div className="space-y-4">
+                              <div className="flex justify-between items-center">
+                                <Label className="text-sm font-semibold text-primary">
+                                  2. Variation Inventory List
+                                </Label>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={addVariation}
+                                >
+                                  <Plus className="h-4 w-4 mr-1" /> Add
+                                  Variation Row
+                                </Button>
+                              </div>
+
+                              {formData.variations.length === 0 ? (
+                                <p className="text-sm text-muted-foreground italic text-center py-6 border-2 border-dashed rounded bg-background">
+                                  No variations added yet. Click 'Add Variation
+                                  Row' to map out your options.
+                                </p>
+                              ) : (
+                                <div className="space-y-2">
+                                  <div
+                                    className="hidden md:grid gap-2 px-2 text-[11px] uppercase tracking-wider font-semibold text-muted-foreground"
+                                    style={{ gridTemplateColumns: gridCols }}
+                                  >
+                                    {formData.variationTypes?.map((type, i) => (
+                                      <div key={i}>{type}</div>
+                                    ))}
+                                    <div>Variation SKU</div>
+                                    <div>Stock</div>
+                                    <div>Cost ({currency})</div>
+                                    <div className="text-center">Action</div>
+                                  </div>
+
+                                  {formData.variations.map((varItem, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="grid grid-cols-1 md:grid-cols-none gap-2 items-end bg-background p-3 md:p-2 rounded border shadow-sm"
+                                      style={{
+                                        gridTemplateColumns:
+                                          typeof window !== "undefined" &&
+                                          window.innerWidth >= 768
+                                            ? gridCols
+                                            : undefined,
+                                      }}
+                                    >
+                                      {formData.variationTypes?.map(
+                                        (type, tIdx) => (
+                                          <div key={tIdx} className="space-y-1">
+                                            <Label className="text-xs md:hidden">
+                                              {type}
+                                            </Label>
+                                            <Input
+                                              value={
+                                                varItem.attributes?.[type] || ""
+                                              }
+                                              onChange={(e) =>
+                                                updateVariationAttribute(
+                                                  idx,
+                                                  type,
+                                                  e.target.value,
+                                                )
+                                              }
+                                              placeholder={`e.g. ${type === "Color" ? "Red" : type === "Size" ? "XL" : "Value"}`}
+                                              className="text-sm font-medium border-primary/20 bg-primary/5"
+                                            />
+                                          </div>
+                                        ),
+                                      )}
+
+                                      <div className="space-y-1">
+                                        <Label className="text-xs md:hidden">
+                                          Variation SKU
+                                        </Label>
+                                        <Input
+                                          value={varItem.sku || ""}
+                                          onChange={(e) =>
+                                            updateVariation(
+                                              idx,
+                                              "sku",
+                                              e.target.value,
+                                            )
+                                          }
+                                          placeholder="PROD-V1"
+                                          className="font-mono text-xs text-primary"
+                                        />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label className="text-xs md:hidden">
+                                          Stock
+                                        </Label>
+                                        <Input
+                                          type="number"
+                                          value={
+                                            varItem.stock === undefined
+                                              ? 0
+                                              : varItem.stock
+                                          }
+                                          onChange={(e) =>
+                                            updateVariation(
+                                              idx,
+                                              "stock",
+                                              Number(e.target.value),
+                                            )
+                                          }
+                                        />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label className="text-xs md:hidden">
+                                          Cost
+                                        </Label>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          value={
+                                            varItem.unitCost === undefined
+                                              ? formData.unitCost
+                                              : varItem.unitCost
+                                          }
+                                          onChange={(e) =>
+                                            updateVariation(
+                                              idx,
+                                              "unitCost",
+                                              Number(e.target.value),
+                                            )
+                                          }
+                                        />
+                                      </div>
+                                      <div className="flex justify-end md:justify-center pb-0.5">
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => removeVariation(idx)}
+                                          className="h-9 w-9 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1059,7 +1170,7 @@ function InventoryContent() {
                   </DialogContent>
                 </Dialog>
 
-                {/* Edit Product Dialog */}
+                {/* --- EDIT PRODUCT DIALOG --- */}
                 <Dialog
                   open={isEditDialogOpen}
                   onOpenChange={setIsEditDialogOpen}
@@ -1236,163 +1347,202 @@ function InventoryContent() {
                             htmlFor="edit-hasVariations"
                             className="font-semibold cursor-pointer"
                           >
-                            Product has variations (This will override base
-                            stock)
+                            Product has advanced variations (Multi-attribute
+                            capable)
                           </Label>
                         </div>
 
                         {formData.hasVariations && (
-                          <div className="space-y-4 border p-4 rounded-md bg-muted/10">
-                            <div className="flex justify-between items-center">
-                              <Label className="text-md font-semibold text-primary">
-                                Manage Variations
+                          <div className="space-y-6 border p-4 rounded-md bg-muted/10">
+                            <div className="space-y-3 pb-4 border-b">
+                              <Label className="text-sm font-semibold text-primary">
+                                1. Define Variation Options
                               </Label>
-                              <Button
-                                type="button"
-                                size="sm"
-                                onClick={addVariation}
-                              >
-                                <Plus className="h-4 w-4 mr-1" /> Add Variation
-                                Option
-                              </Button>
-                            </div>
-
-                            {formData.variations.length === 0 ? (
-                              <p className="text-sm text-muted-foreground italic text-center py-4 border-2 border-dashed rounded">
-                                No variations added yet. Click 'Add Variation
-                                Option' to start mapping out your sizes, colors,
-                                etc.
+                              <p className="text-xs text-muted-foreground">
+                                Add options that determine variations (e.g.
+                                Color, Size, Material).
                               </p>
-                            ) : (
-                              <div className="space-y-2">
-                                <div className="hidden md:grid grid-cols-12 gap-2 px-2 text-xs font-semibold text-muted-foreground">
-                                  <div className="col-span-2">
-                                    Type (e.g. Size)
-                                  </div>
-                                  <div className="col-span-2">
-                                    Value (e.g. XL)
-                                  </div>
-                                  <div className="col-span-3">
-                                    Variation SKU
-                                  </div>
-                                  <div className="col-span-2">Stock</div>
-                                  <div className="col-span-2">
-                                    Cost ({currency})
-                                  </div>
-                                  <div className="col-span-1 text-center">
-                                    Action
-                                  </div>
-                                </div>
-
-                                {formData.variations.map((varItem, idx) => (
+                              <div className="flex gap-2 items-center flex-wrap">
+                                {formData.variationTypes?.map((type, i) => (
                                   <div
-                                    key={idx}
-                                    className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end bg-background p-3 md:p-2 rounded border shadow-sm"
+                                    key={i}
+                                    className="flex items-center gap-1 bg-secondary border p-1 pl-2 rounded-md"
                                   >
-                                    <div className="space-y-1 col-span-1 md:col-span-2">
-                                      <Label className="text-xs md:hidden">
-                                        Type
-                                      </Label>
-                                      <Input
-                                        value={varItem.name || ""}
-                                        onChange={(e) =>
-                                          updateVariation(
-                                            idx,
-                                            "name",
-                                            e.target.value,
-                                          )
-                                        }
-                                        placeholder="Color"
-                                      />
-                                    </div>
-                                    <div className="space-y-1 col-span-1 md:col-span-2">
-                                      <Label className="text-xs md:hidden">
-                                        Value
-                                      </Label>
-                                      <Input
-                                        value={varItem.value || ""}
-                                        onChange={(e) =>
-                                          updateVariation(
-                                            idx,
-                                            "value",
-                                            e.target.value,
-                                          )
-                                        }
-                                        placeholder="Red"
-                                      />
-                                    </div>
-                                    <div className="space-y-1 col-span-1 md:col-span-3">
-                                      <Label className="text-xs md:hidden">
-                                        Variation SKU
-                                      </Label>
-                                      <Input
-                                        value={varItem.sku || ""}
-                                        onChange={(e) =>
-                                          updateVariation(
-                                            idx,
-                                            "sku",
-                                            e.target.value,
-                                          )
-                                        }
-                                        placeholder="PROD-V1"
-                                      />
-                                    </div>
-                                    <div className="space-y-1 col-span-1 md:col-span-2">
-                                      <Label className="text-xs md:hidden">
-                                        Stock
-                                      </Label>
-                                      <Input
-                                        type="number"
-                                        value={
-                                          varItem.stock === undefined
-                                            ? 0
-                                            : varItem.stock
-                                        }
-                                        onChange={(e) =>
-                                          updateVariation(
-                                            idx,
-                                            "stock",
-                                            Number(e.target.value),
-                                          )
-                                        }
-                                      />
-                                    </div>
-                                    <div className="space-y-1 col-span-1 md:col-span-2">
-                                      <Label className="text-xs md:hidden">
-                                        Cost
-                                      </Label>
-                                      <Input
-                                        type="number"
-                                        step="0.01"
-                                        value={
-                                          varItem.unitCost === undefined
-                                            ? formData.unitCost
-                                            : varItem.unitCost
-                                        }
-                                        onChange={(e) =>
-                                          updateVariation(
-                                            idx,
-                                            "unitCost",
-                                            Number(e.target.value),
-                                          )
-                                        }
-                                      />
-                                    </div>
-                                    <div className="col-span-1 flex justify-end md:justify-center">
-                                      <Button
-                                        type="button"
-                                        variant="destructive"
-                                        size="icon"
-                                        onClick={() => removeVariation(idx)}
-                                        className="h-10 w-10"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
+                                    <Input
+                                      value={type}
+                                      onChange={(e) =>
+                                        updateVariationType(i, e.target.value)
+                                      }
+                                      className="h-7 w-24 text-xs font-semibold border-none bg-transparent focus-visible:ring-0 px-1"
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                      onClick={() => removeVariationType(i)}
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
                                   </div>
                                 ))}
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={addVariationType}
+                                  className="h-8 border-dashed"
+                                >
+                                  <Plus className="h-3 w-3 mr-1" /> Add Option
+                                </Button>
                               </div>
-                            )}
+                            </div>
+
+                            <div className="space-y-4">
+                              <div className="flex justify-between items-center">
+                                <Label className="text-sm font-semibold text-primary">
+                                  2. Variation Inventory List
+                                </Label>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={addVariation}
+                                >
+                                  <Plus className="h-4 w-4 mr-1" /> Add
+                                  Variation Row
+                                </Button>
+                              </div>
+
+                              {formData.variations.length === 0 ? (
+                                <p className="text-sm text-muted-foreground italic text-center py-6 border-2 border-dashed rounded bg-background">
+                                  No variations added yet. Click 'Add Variation
+                                  Row' to map out your options.
+                                </p>
+                              ) : (
+                                <div className="space-y-2">
+                                  <div
+                                    className="hidden md:grid gap-2 px-2 text-[11px] uppercase tracking-wider font-semibold text-muted-foreground"
+                                    style={{ gridTemplateColumns: gridCols }}
+                                  >
+                                    {formData.variationTypes?.map((type, i) => (
+                                      <div key={i}>{type}</div>
+                                    ))}
+                                    <div>Variation SKU</div>
+                                    <div>Stock</div>
+                                    <div>Cost ({currency})</div>
+                                    <div className="text-center">Action</div>
+                                  </div>
+
+                                  {formData.variations.map((varItem, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="grid grid-cols-1 md:grid-cols-none gap-2 items-end bg-background p-3 md:p-2 rounded border shadow-sm"
+                                      style={{
+                                        gridTemplateColumns:
+                                          typeof window !== "undefined" &&
+                                          window.innerWidth >= 768
+                                            ? gridCols
+                                            : undefined,
+                                      }}
+                                    >
+                                      {formData.variationTypes?.map(
+                                        (type, tIdx) => (
+                                          <div key={tIdx} className="space-y-1">
+                                            <Label className="text-xs md:hidden">
+                                              {type}
+                                            </Label>
+                                            <Input
+                                              value={
+                                                varItem.attributes?.[type] || ""
+                                              }
+                                              onChange={(e) =>
+                                                updateVariationAttribute(
+                                                  idx,
+                                                  type,
+                                                  e.target.value,
+                                                )
+                                              }
+                                              placeholder={`e.g. ${type === "Color" ? "Red" : type === "Size" ? "XL" : "Value"}`}
+                                              className="text-sm font-medium border-primary/20 bg-primary/5"
+                                            />
+                                          </div>
+                                        ),
+                                      )}
+
+                                      <div className="space-y-1">
+                                        <Label className="text-xs md:hidden">
+                                          Variation SKU
+                                        </Label>
+                                        <Input
+                                          value={varItem.sku || ""}
+                                          onChange={(e) =>
+                                            updateVariation(
+                                              idx,
+                                              "sku",
+                                              e.target.value,
+                                            )
+                                          }
+                                          placeholder="PROD-V1"
+                                          className="font-mono text-xs text-primary"
+                                        />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label className="text-xs md:hidden">
+                                          Stock
+                                        </Label>
+                                        <Input
+                                          type="number"
+                                          value={
+                                            varItem.stock === undefined
+                                              ? 0
+                                              : varItem.stock
+                                          }
+                                          onChange={(e) =>
+                                            updateVariation(
+                                              idx,
+                                              "stock",
+                                              Number(e.target.value),
+                                            )
+                                          }
+                                        />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label className="text-xs md:hidden">
+                                          Cost
+                                        </Label>
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          value={
+                                            varItem.unitCost === undefined
+                                              ? formData.unitCost
+                                              : varItem.unitCost
+                                          }
+                                          onChange={(e) =>
+                                            updateVariation(
+                                              idx,
+                                              "unitCost",
+                                              Number(e.target.value),
+                                            )
+                                          }
+                                        />
+                                      </div>
+                                      <div className="flex justify-end md:justify-center pb-0.5">
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => removeVariation(idx)}
+                                          className="h-9 w-9 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1576,14 +1726,12 @@ function InventoryContent() {
                         const isVariable =
                           product.hasVariations &&
                           product.variations?.length > 0;
-
                         const totalStock = isVariable
                           ? product.variations.reduce(
                               (sum, v) => sum + (v.stock || 0),
                               0,
                             )
                           : product.stock || 0;
-
                         const totalValue = isVariable
                           ? product.variations.reduce(
                               (sum, v) =>
@@ -1755,7 +1903,7 @@ function InventoryContent() {
                               </TableCell>
                             </TableRow>
 
-                            {/* --- EXPANDABLE ROW FOR VARIATIONS --- */}
+                            {/* --- EXPANDABLE ROW FOR MULTI-ATTRIBUTE VARIATIONS --- */}
                             {expandedProducts.has(product._id) &&
                               isVariable && (
                                 <TableRow className="bg-muted/10 border-b-2 border-primary/20">
@@ -1772,10 +1920,7 @@ function InventoryContent() {
                                           <TableHeader className="bg-muted/50">
                                             <TableRow>
                                               <TableHead className="font-semibold py-2">
-                                                Option Type
-                                              </TableHead>
-                                              <TableHead className="font-semibold py-2">
-                                                Value
+                                                Attributes
                                               </TableHead>
                                               <TableHead className="font-semibold py-2">
                                                 Variation SKU
@@ -1798,10 +1943,12 @@ function InventoryContent() {
                                                 className="hover:bg-muted/30"
                                               >
                                                 <TableCell className="py-2 font-medium">
-                                                  {v.name || "-"}
-                                                </TableCell>
-                                                <TableCell className="py-2">
-                                                  {v.value || "-"}
+                                                  <div
+                                                    dangerouslySetInnerHTML={{
+                                                      __html:
+                                                        getVariationLabel(v),
+                                                    }}
+                                                  />
                                                 </TableCell>
                                                 <TableCell className="py-2 font-mono text-primary">
                                                   {v.sku || "-"}
@@ -1903,8 +2050,7 @@ function InventoryContent() {
                   </div>
                   <div className="space-y-1">
                     <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3" />
-                      Out of Stock
+                      <AlertCircle className="h-3 w-3" /> Out of Stock
                     </p>
                     <p className="text-2xl sm:text-3xl font-bold text-red-600 dark:text-red-400">
                       {

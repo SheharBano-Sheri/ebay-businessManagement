@@ -37,6 +37,7 @@ export async function PUT(request, { params }) {
       currency,
       listingUrl,
       hasVariations,
+      variationTypes,
       variations,
     } = body;
 
@@ -54,7 +55,6 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
-    // NEW: WooCommerce-style accurate aggregation of stock
     const calculatedStock =
       hasVariations && variations?.length > 0
         ? variations.reduce((sum, v) => sum + (Number(v.stock) || 0), 0)
@@ -72,6 +72,7 @@ export async function PUT(request, { params }) {
     product.listingUrl = listingUrl;
 
     product.hasVariations = hasVariations || false;
+    product.variationTypes = variationTypes || ["Color"];
     product.variations = variations || [];
 
     product.updatedAt = new Date();

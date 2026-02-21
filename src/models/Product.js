@@ -28,13 +28,15 @@ const ProductSchema = new mongoose.Schema({
   images: [{ type: String }],
   isActive: { type: Boolean, default: true },
 
-  // New Variation Fields Added
+  // -- ADVANCED VARIATIONS SYSTEM --
   hasVariations: { type: Boolean, default: false },
+  variationTypes: [{ type: String }], // E.g., ["Color", "Size"]
   variations: [
     {
-      name: { type: String, required: true }, // e.g., "Color" or "Size"
-      value: { type: String, required: true }, // e.g., "Red" or "XL"
-      sku: { type: String }, // specific SKU for this variation
+      name: { type: String }, // Kept for legacy compatibility
+      value: { type: String }, // Kept for legacy compatibility
+      attributes: { type: Map, of: String }, // E.g., { "Color": "Red", "Size": "XL" }
+      sku: { type: String },
       stock: { type: Number, default: 0 },
       unitCost: { type: Number, default: 0 },
     },
