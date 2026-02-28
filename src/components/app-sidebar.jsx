@@ -120,15 +120,11 @@ export function AppSidebar({ ...props }) {
       icon: IconUsers,
     });
 
-    // --- NEW: Add Purchase History right after Vendors ---
-    // Public vendors don't buy things, so we hide this from them
-    if (session?.user?.role !== "public_vendor") {
-      navItems.push({
-        title: "Purchase History",
-        url: "/dashboard/purchases",
-        icon: IconMenuOrder,
-      });
-    }
+    navItems.push({
+      title: "Purchase History",
+      url: "/dashboard/purchases",
+      icon: IconMenuOrder,
+    });
   }
 
   if (hasAccess("accounts")) {
