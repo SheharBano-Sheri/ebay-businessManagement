@@ -3,25 +3,16 @@
 import * as React from "react";
 import { useSession } from "next-auth/react";
 import UserCheck from "lucide-react";
-// import { useTheme } from "next-themes"; // Removed as it is no longer needed for the logo
 import Image from "next/image";
 import {
   IconBox,
-  IconCamera,
   IconChartBar,
   IconDashboard,
   IconDatabase,
-  IconFileAi,
-  IconFileDescription,
-  IconFileWord,
-  IconFolder,
   IconHelp,
-  IconInnerShadowTop,
   IconListDetails,
   IconMenuOrder,
   IconPackage,
-  IconReport,
-  IconSearch,
   IconSettings,
   IconShield,
   IconUsers,
@@ -36,49 +27,9 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
 const data = {
-  navMain: [
-    {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: IconDashboard,
-    },
-    {
-      title: "Orders",
-      url: "/dashboard/orders",
-      icon: IconPackage,
-    },
-    {
-      title: "Inventory",
-      url: "/dashboard/inventory",
-      icon: IconBox,
-    },
-    {
-      title: "Vendors",
-      url: "/dashboard/vendors",
-      icon: IconUsers,
-    },
-    {
-      title: "Accounts",
-      url: "/dashboard/accounts",
-      icon: IconDatabase,
-    },
-    {
-      title: "Payments",
-      url: "/dashboard/payments",
-      icon: IconChartBar,
-    },
-    {
-      title: "Team",
-      url: "/dashboard/team",
-      icon: IconUsers,
-    },
-  ],
   navSecondary: [
     {
       title: "Settings",
@@ -95,7 +46,6 @@ const data = {
 
 export function AppSidebar({ ...props }) {
   const { data: session } = useSession();
-  // const { theme, resolvedTheme } = useTheme(); // Removed theme hook
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -137,7 +87,7 @@ export function AppSidebar({ ...props }) {
     },
   ];
 
-  // Add Master Admin Panel for Master Admin only (at the top)
+  // Add Master Admin Panel for Master Admin only
   if (session?.user?.role === "master_admin") {
     navItems.push({
       title: "Master Admin Panel",
@@ -169,6 +119,16 @@ export function AppSidebar({ ...props }) {
       url: "/dashboard/vendors",
       icon: IconUsers,
     });
+
+    // --- NEW: Add Purchase History right after Vendors ---
+    // Public vendors don't buy things, so we hide this from them
+    if (session?.user?.role !== "public_vendor") {
+      navItems.push({
+        title: "Purchase History",
+        url: "/dashboard/purchases",
+        icon: IconMenuOrder,
+      });
+    }
   }
 
   if (hasAccess("accounts")) {
@@ -188,7 +148,6 @@ export function AppSidebar({ ...props }) {
   }
 
   // Only owners and users with team permissions can see Team management
-  // Exclude public vendors from team management
   if (
     session?.user?.role === "owner" ||
     session?.user?.role === "public_vendor" ||
@@ -201,17 +160,13 @@ export function AppSidebar({ ...props }) {
     });
   }
 
-  // Add Inventory Approvals page for Master Admin
+  // Add Approvals pages for Master Admin
   if (session?.user?.role === "master_admin") {
     navItems.push({
       title: "Inventory Approvals",
       url: "/dashboard/inventory-approvals",
       icon: IconListDetails,
     });
-  }
-
-  // Add Vendor Approvals page for Master Admin
-  if (session?.user?.role === "master_admin") {
     navItems.push({
       title: "Vendor Approvals",
       url: "/dashboard/vendor-approvals",
@@ -219,9 +174,6 @@ export function AppSidebar({ ...props }) {
     });
   }
 
-
-  // STATIC LOGO: Use the specific image for all themes
-  // Make sure to rename your file to 'logo.png' and place it in the public folder
   const logoSrc = "/logo.png";
 
   return (
@@ -238,7 +190,6 @@ export function AppSidebar({ ...props }) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navItems} />
-        {/* <NavDocuments items={data.navTeam} /> */}
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
