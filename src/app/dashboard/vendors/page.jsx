@@ -261,9 +261,9 @@ export default function VendorsPage() {
                                   </Badge>
                                 )}
                               </CardTitle>
-                              <CardDescription className="mt-1">
+                              {/* <CardDescription className="mt-1">
                                 {vendor.email || "No email provided"}
-                              </CardDescription>
+                              </CardDescription> */}
                             </div>
                             <Badge variant="secondary">Public</Badge>
                           </div>
@@ -349,9 +349,9 @@ export default function VendorsPage() {
                           <div className="flex items-start justify-between">
                             <div>
                               <CardTitle>{vendor.name}</CardTitle>
-                              <CardDescription className="mt-1">
+                              {/* <CardDescription className="mt-1">
                                 {vendor.email || "No email provided"}
-                              </CardDescription>
+                              </CardDescription> */}
                             </div>
                             <Badge
                               variant={
