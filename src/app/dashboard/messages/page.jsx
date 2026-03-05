@@ -1,12 +1,11 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
-import { useSearchParams } from 'next/navigation';
-import { ConversationList } from '@/components/messages/conversation-list';
-import { ChatWindow } from '@/components/messages/chat-window';
-import { initSocket, disconnectSocket } from '@/lib/socket-client';
-import { MessageSquare } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
+import { ConversationList } from "@/components/messages/conversation-list";
+import { ChatWindow } from "@/components/messages/chat-window";
+import { MessageSquare } from "lucide-react";
 
 export default function MessagesPage() {
   const { data: session } = useSession();
@@ -17,36 +16,37 @@ export default function MessagesPage() {
 
   useEffect(() => {
     if (session?.user?.id) {
-      // Initialize socket connection
-      initSocket(session.user.id);
+      // Initial load with loader
+      fetchConversations(true);
 
-      // Load conversations
-      fetchConversations();
+      // Background polling every 10 seconds for updates to the conversation list
+      const pollInterval = setInterval(() => {
+        fetchConversations(false);
+      }, 10000);
 
       // Check if there's a conversation in URL
-      const conversationFromUrl = searchParams.get('conversation');
+      const conversationFromUrl = searchParams.get("conversation");
       if (conversationFromUrl) {
         setSelectedConversationId(conversationFromUrl);
       }
 
-      return () => {
-        disconnectSocket();
-      };
+      return () => clearInterval(pollInterval);
     }
   }, [session, searchParams]);
 
-  async function fetchConversations() {
+  async function fetchConversations(showLoader = false) {
+    if (showLoader) setLoading(true);
     try {
-      const response = await fetch('/api/messages/conversations');
+      const response = await fetch("/api/messages/conversations");
       const data = await response.json();
-      
+
       if (data.success) {
         setConversations(data.conversations);
       }
     } catch (error) {
-      console.error('Failed to fetch conversations:', error);
+      console.error("Failed to fetch conversations:", error);
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   }
 
@@ -55,7 +55,7 @@ export default function MessagesPage() {
   }
 
   function handleConversationUpdate() {
-    fetchConversations();
+    fetchConversations(false);
   }
 
   if (loading) {
@@ -74,7 +74,8 @@ export default function MessagesPage() {
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Messages</h1>
         <p className="text-muted-foreground">
-          Communicate directly with your {session?.user?.role === 'public_vendor' ? 'clients' : 'vendors'}
+          Communicate directly with your{" "}
+          {session?.user?.role === "public_vendor" ? "clients" : "vendors"}
         </p>
       </div>
 
@@ -98,7 +99,9 @@ export default function MessagesPage() {
             <div className="flex items-center justify-center h-full bg-muted/10">
               <div className="text-center">
                 <MessageSquare className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
-                <h3 className="text-lg font-semibold mb-2">No conversation selected</h3>
+                <h3 className="text-lg font-semibold mb-2">
+                  No conversation selected
+                </h3>
                 <p className="text-muted-foreground">
                   Select a conversation from the list to start messaging
                 </p>
