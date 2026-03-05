@@ -12,6 +12,7 @@ import {
   IconHelp,
   IconListDetails,
   IconMenuOrder,
+  IconMessage,
   IconPackage,
   IconSettings,
   IconShield,
@@ -124,6 +125,12 @@ export function AppSidebar({ ...props }) {
       title: "Purchase History",
       url: "/dashboard/purchases",
       icon: IconMenuOrder,
+    });
+
+    navItems.push({
+      title: "Messages",
+      url: "/dashboard/messages",
+      icon: IconMessage,
     });
   }
 

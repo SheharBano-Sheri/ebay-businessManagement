@@ -694,3 +694,207 @@ Need help? Contact our support team.
     return { success: false, error: error.message };
   }
 }
+
+export async function sendMessageNotificationEmail({
+  to,
+  recipientName,
+  senderName,
+  messagePreview,
+  conversationId
+}) {
+  try {
+    if (!process.env.EMAIL_HOST) {
+      console.warn("Email service not configured. Skipping message notification.");
+      return {
+        success: true,
+        skipped: true,
+        message: "Email service not configured",
+      };
+    }
+
+    const senderEmail = process.env.EMAIL_USER;
+    const senderDisplayName = process.env.APP_NAME || "Genie Business Management System";
+
+    const messageLink = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/dashboard/messages?conversation=${conversationId}`;
+
+    // Plain Text Version
+    const textContent = `
+Hi ${recipientName},
+
+You have a new message from ${senderName} on Genie Business Management System.
+
+Message Preview:
+"${messagePreview}${messagePreview.length >= 100 ? '...' : ''}"
+
+View and Reply:
+${messageLink}
+
+If you need to discuss this message, please log in to your account and respond directly through the messaging system.
+
+(c) ${new Date().getFullYear()} Genie Business Management System. All rights reserved.
+`;
+
+    // HTML Version with modern styling
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background-color: #f5f5f5;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px 20px;
+      text-align: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .content {
+      padding: 30px 20px;
+    }
+    .content h2 {
+      color: #333;
+      margin-top: 0;
+      font-size: 20px;
+    }
+    .message-box {
+      background-color: #f8f9fa;
+      border-left: 4px solid #667eea;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    .message-box p {
+      margin: 5px 0;
+      font-style: italic;
+      color: #555;
+    }
+    .sender-name {
+      font-weight: 600;
+      color: #667eea;
+    }
+    .button-container {
+      text-align: center;
+      margin: 30px 0;
+    }
+    .button {
+      display: inline-block;
+      padding: 14px 32px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white !important;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 16px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      transition: transform 0.2s;
+    }
+    .button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 8px rgba(0,0,0,0.15);
+    }
+    .link-text {
+      background-color: #f8f9fa;
+      padding: 10px;
+      border-radius: 4px;
+      word-break: break-all;
+      font-size: 13px;
+      color: #555;
+      margin: 15px 0;
+    }
+    .footer {
+      background-color: #f8f9fa;
+      padding: 20px;
+      text-align: center;
+      font-size: 13px;
+      color: #666;
+      border-top: 1px solid #e0e0e0;
+    }
+    .footer p {
+      margin: 5px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>💬 New Message</h1>
+    </div>
+    <div class="content">
+      <h2>Hi ${recipientName},</h2>
+      
+      <p>You have received a new message from <span class="sender-name">${senderName}</span> on Genie Business Management System.</p>
+      
+      <div class="message-box">
+        <p><strong>Message Preview:</strong></p>
+        <p>"${messagePreview}${messagePreview.length >= 100 ? '...' : ''}"</p>
+      </div>
+      
+      <div class="button-container">
+        <a href="${messageLink}" class="button">
+          View & Reply to Message
+        </a>
+      </div>
+      
+      <p>Click the button above to view the full message and continue the conversation.</p>
+      
+      <p>If the button doesn't work, copy and paste this link into your browser:</p>
+      <div class="link-text">${messageLink}</div>
+      
+      <p style="margin-top: 30px;">This is an automated notification. Please do not reply to this email.</p>
+    </div>
+    <div class="footer">
+      <p><strong>Need help?</strong> Contact our support team</p>
+      <p>&copy; ${new Date().getFullYear()} Genie Business Management System. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+    // Setup transporter
+    const transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST,
+      port: parseInt(process.env.EMAIL_PORT || "587"),
+      secure: process.env.EMAIL_SECURE === "true",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    const mailOptions = {
+      from: `"${senderDisplayName}" <${senderEmail}>`,
+      to,
+      subject: `New message from ${senderName}`,
+      html: htmlContent,
+      text: textContent,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error("Message notification email failed:", error);
+    return { success: false, error: error.message };
+  }
+}

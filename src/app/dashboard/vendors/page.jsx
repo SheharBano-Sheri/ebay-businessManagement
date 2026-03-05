@@ -21,6 +21,7 @@ import {
 import { toast } from "sonner";
 import { Search, Plus, Building2, CheckCircle, Mail, UserPlus, Eye, Settings, Trash2, EyeOff } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { MessageVendorButton } from "@/components/messages/message-vendor-button";
 
 export default function VendorsPage() {
   const { data: session } = useSession();
@@ -282,6 +283,14 @@ export default function VendorsPage() {
                           )}
                         </CardContent>
                         <CardFooter className="flex flex-col gap-2">
+                          {vendor.isAddedByCurrentUser && vendor.vendorType === 'public' && (
+                            <MessageVendorButton 
+                              vendorId={vendor._id}
+                              vendorName={vendor.name}
+                              variant="outline"
+                              size="sm"
+                            />
+                          )}
                           <Button
                             className="w-full"
                             onClick={() => addVendorToAccount(vendor._id)}
@@ -369,6 +378,14 @@ export default function VendorsPage() {
                         <CardContent>
                           <p className="text-sm text-muted-foreground line-clamp-3">
                             {vendor.description || "No description available"}
+                          {vendor.vendorType === "public" && (
+                            <MessageVendorButton 
+                              vendorId={vendor._id}
+                              vendorName={vendor.name}
+                              variant="outline"
+                              size="sm"
+                            />
+                          )}
                           </p>
                           {vendor.notes && (
                             <div className="mt-2 p-2 bg-muted rounded text-sm">
