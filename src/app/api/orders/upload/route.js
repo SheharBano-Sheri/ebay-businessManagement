@@ -223,7 +223,6 @@ export async function POST(request) {
 
     const headers = Object.keys(parsed.data[0] || {});
     const reportType = detectReportType(headers);
-    console.log("Detected report type:", reportType);
 
     // --- HANDLE COST UPDATE UPLOAD ---
     if (reportType === "COST_UPDATE") {
@@ -331,10 +330,9 @@ export async function POST(request) {
 
     const orderGroups = new Map();
     const errors = [];
-    const orderNumbersToReplace = new Set();
+    const exactRecordsToRemove = []; // Track exactly which order types to delete to avoid wiping Sale on a Refund sync
 
     // Data structures for aggregation
-    // We will combine actual "Insertion fees" and "eBay collected tax" into this single object
     const monthlyInsertionFees = {};
 
     // --- FIRST PASS: GROUPING & PRE-FILTERING ---
@@ -355,26 +353,27 @@ export async function POST(request) {
       // --- HANDLE INDIVIDUAL INSERTION FEE ROWS ---
       const description = (getValue(row, "Description") || "").toLowerCase();
       const rowTypeLower = rowType.toLowerCase();
-          
-      // Only treat as Monthly Insertion Fee if:
-      // 1. The Type is explicitly "insertion fee" 
-      // OR 2. The description says "insertion fee" AND it's some kind of "fee" type row
+
+      // Only treat as Monthly Insertion Fee if explicitly insertion fee
       if (
-        rowTypeLower === "insertion fee" || 
-        (description.includes("insertion fee") && rowTypeLower.includes("other fee"))
+        rowTypeLower === "insertion fee" ||
+        (description.includes("insertion fee") &&
+          rowTypeLower.includes("other fee"))
       ) {
-        const dateStr = getValue(row, "Date") || getValue(row, "Transaction creation date");
+        const dateStr =
+          getValue(row, "Date") || getValue(row, "Transaction creation date");
         const date = parseDate(dateStr);
-        
+
         if (date) {
           const monthKey = getMonthKey(date);
           const amount = parseFloat(
-            getValue(row, "Amount") || getValue(row, "Net amount") || "0"
+            getValue(row, "Amount") || getValue(row, "Net amount") || "0",
           );
-          
-          monthlyInsertionFees[monthKey] = (monthlyInsertionFees[monthKey] || 0) + Math.abs(amount);
+
+          monthlyInsertionFees[monthKey] =
+            (monthlyInsertionFees[monthKey] || 0) + Math.abs(amount);
         }
-        continue; // This prevents the row from being added to any Order Group
+        continue; // Prevents the row from being added to any Order Group
       }
 
       let orderNumber;
@@ -387,7 +386,6 @@ export async function POST(request) {
         orderNumber =
           getValue(row, "Order number") || getValue(row, "Order Number");
 
-        // Skip rows that don't have a valid order number
         if (!orderNumber || orderNumber === "--" || orderNumber.trim() === "") {
           continue;
         }
@@ -406,8 +404,69 @@ export async function POST(request) {
     // --- SECOND PASS: PROCESSING GROUPS ---
     for (const [orderNumber, rows] of orderGroups) {
       try {
-        // Find the "Order" row (Main row)
-        const orderRow = rows.find((r) => {
+        if (reportType === "EXPORTED") {
+          for (const r of rows) {
+            const orderDateStr =
+              getValue(r, "Transaction creation date") ||
+              getValue(r, "Date") ||
+              getValue(r, "orderDate") ||
+              getValue(r, "Order Date");
+            const orderDate = parseDate(orderDateStr) || new Date();
+            const rTypeNative =
+              getValue(r, "Transaction Type") ||
+              getValue(r, "transactionType") ||
+              "Sale";
+            const grossAmount = parseFloat(getValue(r, "Gross Amount") || "0");
+            const fees = parseFloat(getValue(r, "Fees") || "0");
+            const sourcingCost = parseFloat(
+              getValue(r, "Sourcing Cost") || "0",
+            );
+            const shippingCost = parseFloat(
+              getValue(r, "Shipping Cost") || "0",
+            );
+            const netAmount = parseFloat(getValue(r, "Net Amount") || "0");
+            const grossProfit = parseFloat(getValue(r, "Gross Profit") || "0");
+
+            const orderData = {
+              adminId,
+              accountId,
+              uploadedBy: user._id,
+              fileHash,
+              orderNumber,
+              sku: getValue(r, "SKU") || getValue(r, "sku") || "--",
+              itemName:
+                getValue(r, "Item Name") ||
+                getValue(r, "itemName") ||
+                "Untitled Item",
+              orderedQty:
+                parseInt(
+                  getValue(r, "Quantity") || getValue(r, "orderedQty"),
+                ) || 1,
+              transactionType: rTypeNative,
+              grossAmount,
+              fees,
+              netAmount,
+              description: getValue(r, "Description") || "",
+              sourcingCost,
+              shippingCost,
+              grossProfit,
+              currency: account.defaultCurrency || "GBP",
+              orderDate,
+            };
+
+            exactRecordsToRemove.push({
+              orderNumber: orderData.orderNumber,
+              transactionType: orderData.transactionType,
+            });
+            ordersToInsert.push(orderData);
+          }
+          continue;
+        }
+
+        // Standard EBAY_REPORT Logic
+
+        // 1. Evaluate "Order" or "Sale" primary row
+        const orderRows = rows.filter((r) => {
           const t = (
             getValue(r, "Type") ||
             getValue(r, "Transaction type") ||
@@ -418,71 +477,19 @@ export async function POST(request) {
           return t === "order" || t === "sale";
         });
 
-        // If no main order row found in this group (e.g. only orphaned fees), skip
-        if (!orderRow && reportType !== "EXPORTED") {
-          continue;
-        }
+        const mainRow = orderRows[0];
 
-        const mainRow = orderRow || rows[0];
-
-        // Metadata
-        const sku =
-          getValue(mainRow, "Custom label") || getValue(mainRow, "SKU") || "--";
-        const itemName =
-          getValue(mainRow, "Item title") ||
-          getValue(mainRow, "Item Title") ||
-          "Untitled Item";
-        const quantity = getValue(mainRow, "Quantity") || "1";
-        const orderDateStr =
-          getValue(mainRow, "Transaction creation date") ||
-          getValue(mainRow, "Date");
-        const orderDate = parseDate(orderDateStr);
-
-        if (!orderDate) {
-          errors.push({
-            row: mainRow.originalIndex + 2,
-            error: `Invalid Date: ${orderDateStr}`,
-            data: mainRow,
-          });
-          continue;
-        }
-
-        // --- AGGREGATE TAX AS INSERTION FEE ---
-        // Requirement: "even eBay collected tax is considered to be Insertion fee"
-        const taxVal = parseFloat(
-          getValue(mainRow, "eBay collected tax") || "0",
-        );
-        if (taxVal && taxVal !== 0) {
-          const monthKey = getMonthKey(orderDate);
-          // Tax is usually positive in column Z? or negative?
-          // We take Abs to be safe and treat it as a cost
-          monthlyInsertionFees[monthKey] =
-            (monthlyInsertionFees[monthKey] || 0) + Math.abs(taxVal);
-        }
-
-        let totalGross = 0;
-        let totalFees = 0;
-        let totalNet = 0;
         let totalSourcingCost = 0;
         let totalShippingCost = 0;
 
-        if (reportType === "EXPORTED") {
-          rows.forEach((r) => {
-            totalGross += parseFloat(getValue(r, "Gross Amount") || "0");
-            totalFees += parseFloat(getValue(r, "Fees") || "0");
-            totalSourcingCost += parseFloat(
-              getValue(r, "Sourcing Cost") || "0",
-            );
-            totalShippingCost += parseFloat(
-              getValue(r, "Shipping Cost") || "0",
-            );
-          });
-          totalNet =
-            totalGross - totalFees - totalSourcingCost - totalShippingCost;
-        } else {
-          // --- NEW CALCULATION LOGIC ---
+        rows.forEach((r) => {
+          const shipExp = getValue(r, "Shipping Cost (Expense)");
+          if (shipExp) totalShippingCost += parseFloat(shipExp);
+          totalSourcingCost += parseFloat(getValue(r, "Sourcing Cost") || "0");
+        });
 
-          // 1. Get Exchange Rate from "Order" row
+        // Add primary Sale to array
+        if (mainRow) {
           const exchangeRateStr = getValue(mainRow, "Exchange rate");
           const exchangeRate =
             exchangeRateStr &&
@@ -491,23 +498,16 @@ export async function POST(request) {
               ? parseFloat(exchangeRateStr)
               : 1.0;
 
-          // 2. Gross Amount: Pick from AH (Gross transaction amount) of the ORDER row
-          // And multiply by Exchange Rate
           const rawGrossAmount = parseFloat(
             getValue(mainRow, "Gross transaction amount") ||
               getValue(mainRow, "Gross Amount") ||
               "0",
           );
-          totalGross = rawGrossAmount * exchangeRate;
+          const totalGross = rawGrossAmount * exchangeRate;
 
-          // 3. Fee Calculation
-
-          // A) Sum fee columns from the Order Row (AB-AG)
           const orderFeesNative = sumFeeColumns(mainRow);
-          // Convert Order Fees to Payout Currency
           const orderFeesConverted = orderFeesNative * exchangeRate;
 
-          // B) Add "Other fee" rows (e.g. Promoted Listings)
           let otherFeesTotal = 0;
           rows.forEach((r) => {
             const rType = (getValue(r, "Type") || "").trim().toLowerCase();
@@ -516,67 +516,175 @@ export async function POST(request) {
             }
           });
 
-          // Calculate Total Fees (Absolute Value)
-          totalFees = Math.abs(orderFeesConverted + otherFeesTotal);
-
-          // 4. Expenses (Sourcing / Shipping)
-          rows.forEach((r) => {
-            const shipExp = getValue(r, "Shipping Cost (Expense)");
-            if (shipExp) {
-              totalShippingCost += parseFloat(shipExp);
-            }
-            totalSourcingCost += parseFloat(
-              getValue(r, "Sourcing Cost") || "0",
-            );
-          });
-
-          // 5. Net Amount & Gross Profit
-          totalNet = totalGross - totalFees;
+          const totalFees = Math.abs(orderFeesConverted + otherFeesTotal);
+          const totalNet = totalGross - totalFees;
           const grossProfit = totalNet - totalSourcingCost - totalShippingCost;
 
-          const orderData = {
-            adminId,
-            accountId,
-            uploadedBy: user._id,
-            fileHash,
-            orderNumber,
-            sku,
-            itemName,
-            orderedQty: parseInt(quantity) || 1,
-            transactionType: "Sale",
-            grossAmount: totalGross,
-            fees: totalFees,
-            netAmount: totalNet,
-            description: getValue(mainRow, "Description") || "",
-            sourcingCost: totalSourcingCost,
-            shippingCost: totalShippingCost,
-            grossProfit: grossProfit,
-            currency: account.defaultCurrency || "GBP",
-            orderDate,
-          };
+          const sku =
+            getValue(mainRow, "Custom label") ||
+            getValue(mainRow, "SKU") ||
+            "--";
+          const itemName =
+            getValue(mainRow, "Item title") ||
+            getValue(mainRow, "Item Title") ||
+            "Untitled Item";
+          const quantity = getValue(mainRow, "Quantity") || "1";
+          const orderDateStr =
+            getValue(mainRow, "Transaction creation date") ||
+            getValue(mainRow, "Date");
+          const orderDate = parseDate(orderDateStr);
 
-          // --- SOURCING COST LOOKUP ---
-          if (orderData.sku && orderData.sku !== "--") {
-            const product = await Product.findOne({
-              sku: orderData.sku,
+          if (orderDate) {
+            // Incorporate collected Tax as an expense too
+            const taxVal = parseFloat(
+              getValue(mainRow, "eBay collected tax") || "0",
+            );
+            if (taxVal && taxVal !== 0) {
+              const monthKey = getMonthKey(orderDate);
+              monthlyInsertionFees[monthKey] =
+                (monthlyInsertionFees[monthKey] || 0) + Math.abs(taxVal);
+            }
+
+            const orderData = {
               adminId,
-            });
-            if (product) {
-              orderData.productId = product._id;
-              if (orderData.sourcingCost === 0 && product.sourcingPrice) {
-                orderData.sourcingCost =
-                  product.sourcingPrice * orderData.orderedQty;
-                // Recalculate profit
-                orderData.grossProfit =
-                  orderData.netAmount -
-                  orderData.sourcingCost -
-                  orderData.shippingCost;
+              accountId,
+              uploadedBy: user._id,
+              fileHash,
+              orderNumber,
+              sku,
+              itemName,
+              orderedQty: parseInt(quantity) || 1,
+              transactionType: "Sale",
+              grossAmount: totalGross,
+              fees: totalFees,
+              netAmount: totalNet,
+              description: getValue(mainRow, "Description") || "",
+              sourcingCost: totalSourcingCost,
+              shippingCost: totalShippingCost,
+              grossProfit: grossProfit,
+              currency: account.defaultCurrency || "GBP",
+              orderDate,
+            };
+
+            // Sourcing Price Lookup Database Fallback
+            if (orderData.sku && orderData.sku !== "--") {
+              const product = await Product.findOne({
+                sku: orderData.sku,
+                adminId,
+              });
+              if (product) {
+                orderData.productId = product._id;
+                if (orderData.sourcingCost === 0 && product.sourcingPrice) {
+                  orderData.sourcingCost =
+                    product.sourcingPrice * orderData.orderedQty;
+                  orderData.grossProfit =
+                    orderData.netAmount -
+                    orderData.sourcingCost -
+                    orderData.shippingCost;
+                }
               }
             }
-          }
 
-          orderNumbersToReplace.add(orderNumber);
-          ordersToInsert.push(orderData);
+            exactRecordsToRemove.push({
+              orderNumber: orderData.orderNumber,
+              transactionType: "Sale",
+            });
+            ordersToInsert.push(orderData);
+          } else {
+            errors.push({
+              row: mainRow.originalIndex + 2,
+              error: `Invalid Date: ${orderDateStr}`,
+              data: mainRow,
+            });
+          }
+        }
+
+        // 2. Process Returns, Refunds, Claims, Cancellations, Holds
+        const specialTypes = [
+          "refund",
+          "claim",
+          "cancellation",
+          "hold",
+          "dispute",
+          "return",
+        ];
+
+        for (const r of rows) {
+          const rTypeNative = (
+            getValue(r, "Type") ||
+            getValue(r, "Transaction type") ||
+            ""
+          ).trim();
+          const rType = rTypeNative.toLowerCase();
+
+          if (
+            specialTypes.includes(rType) ||
+            (rType === "other fee" && !mainRow)
+          ) {
+            const orderDateStr =
+              getValue(r, "Transaction creation date") || getValue(r, "Date");
+            const orderDate = parseDate(orderDateStr);
+            if (!orderDate) continue;
+
+            const exchangeRateStr = getValue(r, "Exchange rate");
+            const exchangeRate =
+              exchangeRateStr &&
+              exchangeRateStr.trim() !== "" &&
+              exchangeRateStr !== "--"
+                ? parseFloat(exchangeRateStr)
+                : 1.0;
+
+            const rawGrossAmount = parseFloat(
+              getValue(r, "Gross transaction amount") ||
+                getValue(r, "Gross Amount") ||
+                "0",
+            );
+            const rTotalGross = rawGrossAmount * exchangeRate;
+
+            const rawNet = parseFloat(getValue(r, "Net amount") || "0");
+            const rTotalNet = rawNet; // Net is in payout currency natively
+
+            // Calculates returned fees automatically ensuring Pre-Save hooks match up.
+            const rTotalFees = rTotalGross - rTotalNet;
+
+            const sku =
+              getValue(r, "Custom label") || getValue(r, "SKU") || "--";
+            const itemName =
+              getValue(r, "Item title") ||
+              getValue(r, "Item Title") ||
+              "Untitled Item";
+            const quantity = getValue(r, "Quantity") || "1";
+
+            const transactionType =
+              rType === "other fee" ? "Other fee" : rTypeNative;
+
+            const orderData = {
+              adminId,
+              accountId,
+              uploadedBy: user._id,
+              fileHash,
+              orderNumber,
+              sku,
+              itemName,
+              orderedQty: parseInt(quantity) || 1,
+              transactionType: transactionType,
+              grossAmount: rTotalGross,
+              fees: rTotalFees,
+              netAmount: rTotalNet,
+              description: getValue(r, "Description") || "",
+              sourcingCost: 0,
+              shippingCost: 0,
+              grossProfit: rTotalNet, // net is the profit offset mathematically
+              currency: account.defaultCurrency || "GBP",
+              orderDate,
+            };
+
+            exactRecordsToRemove.push({
+              orderNumber: orderData.orderNumber,
+              transactionType: orderData.transactionType,
+            });
+            ordersToInsert.push(orderData);
+          }
         }
       } catch (err) {
         errors.push({
@@ -590,15 +698,12 @@ export async function POST(request) {
     // --- CREATE SUMMARY ORDERS FOR INSERTION FEES (Combined with TAX) ---
     const allMonths = Object.keys(monthlyInsertionFees);
 
-    // Generate unique suffix to avoid collision
-    const fileHashSuffix = fileHash.substring(0, 8);
-
     for (const month of allMonths) {
       if (monthlyInsertionFees[month] && monthlyInsertionFees[month] > 0) {
         const [year, m] = month.split("-");
         const summaryDate = new Date(parseInt(year), parseInt(m) - 1, 1); // 1st of month
 
-        ordersToInsert.push({
+        const orderData = {
           adminId,
           accountId,
           uploadedBy: user._id,
@@ -610,25 +715,45 @@ export async function POST(request) {
           transactionType: "Insertion Fees",
           grossAmount: 0,
           fees: monthlyInsertionFees[month],
-          netAmount: monthlyInsertionFees[month],
-          grossProfit: -monthlyInsertionFees[month],
+          netAmount: -Math.abs(monthlyInsertionFees[month]),
+          grossProfit: -Math.abs(monthlyInsertionFees[month]),
           currency: account.defaultCurrency || "GBP",
           orderDate: summaryDate,
           sourcingCost: 0,
           shippingCost: 0,
           description:
             "Aggregated insertion fees and eBay collected tax from CSV upload",
+        };
+
+        exactRecordsToRemove.push({
+          orderNumber: orderData.orderNumber,
+          transactionType: orderData.transactionType,
         });
+        ordersToInsert.push(orderData);
       }
     }
 
-    if (orderNumbersToReplace.size > 0) {
-      const orderNumbersArray = Array.from(orderNumbersToReplace);
-      await EbayOrder.deleteMany({
-        adminId,
-        accountId,
-        orderNumber: { $in: orderNumbersArray },
-      });
+    // --- PREVENT DUPLICATES BY SPECIFIC TRANSACTION REPLACEMENT ---
+    if (exactRecordsToRemove.length > 0) {
+      const typeToOrders = {};
+      for (const t of exactRecordsToRemove) {
+        if (!typeToOrders[t.transactionType])
+          typeToOrders[t.transactionType] = new Set();
+        typeToOrders[t.transactionType].add(t.orderNumber);
+      }
+
+      const orConditions = Object.keys(typeToOrders).map((type) => ({
+        transactionType: type,
+        orderNumber: { $in: Array.from(typeToOrders[type]) },
+      }));
+
+      if (orConditions.length > 0) {
+        await EbayOrder.deleteMany({
+          adminId,
+          accountId,
+          $or: orConditions,
+        });
+      }
     }
 
     let insertedOrders = [];
