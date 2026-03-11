@@ -43,7 +43,6 @@ import {
   Plus,
   Download,
   Search,
-  Calendar,
   Package,
   MapPin,
   Phone,
@@ -66,7 +65,7 @@ export default function OrdersPage() {
   // Filters State
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAccount, setSelectedAccount] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all"); // New: for vendors
+  const [statusFilter, setStatusFilter] = useState("all");
   const [currency, setCurrency] = useState("USD");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -93,7 +92,6 @@ export default function OrdersPage() {
 
   const isPublicVendor = session?.user?.role === "public_vendor";
 
-  // Define functions before useEffect hooks
   const recalculateGrossProfit = useCallback(async () => {
     try {
       const response = await fetch("/api/orders/recalculate", {
@@ -130,7 +128,6 @@ export default function OrdersPage() {
     try {
       setLoading(true);
 
-      // --- LOGIC FOR PUBLIC VENDOR ---
       if (session?.user?.role === "public_vendor") {
         let url = "/api/vendor-purchases?forVendor=true";
         if (startDate) url += `&startDate=${startDate}`;
@@ -145,10 +142,9 @@ export default function OrdersPage() {
           setVendorPurchases(purchasesData.purchases || []);
         }
         setLoading(false);
-        return; // Skip standard order fetch for public vendors
+        return;
       }
 
-      // --- LOGIC FOR BUSINESS USERS ---
       let url = "/api/orders?";
       if (startDate) url += `startDate=${startDate}&`;
       if (endDate) url += `endDate=${endDate}&`;
@@ -169,10 +165,8 @@ export default function OrdersPage() {
     }
   }, [startDate, endDate, selectedAccount, statusFilter, searchTerm, session]);
 
-  // useEffect hooks after function definitions
   useEffect(() => {
     if (session) {
-      // Only fetch accounts if NOT a public vendor
       if (session.user.role !== "public_vendor") {
         fetchAccounts();
         const hasRecalculated = localStorage.getItem("grossProfitRecalculated");
@@ -184,17 +178,14 @@ export default function OrdersPage() {
     }
   }, [session, fetchAccounts, fetchOrders, recalculateGrossProfit]);
 
-  // NEW: Sync currency with selected account
   useEffect(() => {
     if (accounts.length > 0) {
       if (selectedAccount !== "all") {
-        // If specific account selected, use its currency
         const account = accounts.find((a) => a._id === selectedAccount);
         if (account?.defaultCurrency) {
           setCurrency(account.defaultCurrency);
         }
       } else {
-        // If "all" selected (or default), pick the first available account's currency
         if (accounts[0]?.defaultCurrency) {
           setCurrency(accounts[0].defaultCurrency);
         }
@@ -203,7 +194,6 @@ export default function OrdersPage() {
   }, [selectedAccount, accounts]);
 
   const handleStatusUpdate = async (orderId, newStatus) => {
-    // Optimistic UI update
     const previousPurchases = [...vendorPurchases];
     setVendorPurchases((prev) =>
       prev.map((p) => (p._id === orderId ? { ...p, status: newStatus } : p)),
@@ -225,7 +215,7 @@ export default function OrdersPage() {
     } catch (error) {
       console.error(error);
       toast.error("Failed to update status");
-      setVendorPurchases(previousPurchases); // Revert on failure
+      setVendorPurchases(previousPurchases);
     }
   };
 
@@ -235,7 +225,6 @@ export default function OrdersPage() {
     const currency = order.productSnapshot?.currency || "USD";
     const total = order.totalCost.toFixed(2);
 
-    // Vendor Info (User's own info if they are the vendor)
     const vendorName = order.vendorId?.name || "Vendor";
     const vendorEmail = order.vendorId?.email || "";
 
@@ -357,7 +346,6 @@ export default function OrdersPage() {
 
   const handleFileUpload = useCallback(
     async (e) => {
-      // ... (Existing CSV logic same as before)
       const file = e.target.files?.[0];
       if (!file) return;
 
@@ -462,11 +450,9 @@ export default function OrdersPage() {
           }
           fetchOrders();
         } else {
-          // Enhanced error handling for validation errors
           const errorMessage = data.error || "Upload failed";
           const errorDetails = data.errorDetails || [];
 
-          // If it's a validation error with missing columns
           if (data.missingColumns) {
             toast.error(
               `CSV validation failed: Missing columns - ${data.missingColumns.join(
@@ -562,9 +548,19 @@ export default function OrdersPage() {
 
       if (response.ok) {
         setOrders((prevOrders) =>
-          prevOrders.map((order) =>
-            order._id === orderId ? { ...order, [field]: parsedValue } : order,
-          ),
+          prevOrders.map((order) => {
+            if (order._id === orderId) {
+              const updatedOrder = { ...order, [field]: parsedValue };
+              // Calculate real gross profit correctly so the UI updates instantly
+              updatedOrder.grossProfit =
+                updatedOrder.grossAmount -
+                updatedOrder.fees -
+                updatedOrder.sourcingCost -
+                updatedOrder.shippingCost;
+              return updatedOrder;
+            }
+            return order;
+          }),
         );
         toast.success("Order updated successfully");
       } else {
@@ -643,12 +639,9 @@ export default function OrdersPage() {
     [exportDateRange, isExporting, orders],
   );
 
-  // New function to download CSV template
   const handleDownloadTemplate = () => {
-    // Generate template with existing orders for cost updates
     const headers = ["Order #", "Sourcing Cost", "Shipping Cost"];
 
-    // Use currently loaded orders to populate the template
     const csvData = filteredOrders.map((order) => [
       order.orderNumber,
       order.sourcingCost || 0,
@@ -697,13 +690,10 @@ export default function OrdersPage() {
       order.itemName,
       order.orderedQty,
       order.grossAmount,
-      Math.abs(order.fees),
+      order.fees,
       order.sourcingCost,
       order.shippingCost,
-      order.grossAmount -
-        Math.abs(order.fees) -
-        order.sourcingCost -
-        order.shippingCost,
+      order.grossProfit,
       order.currency,
       order.transactionType,
     ]);
@@ -726,7 +716,6 @@ export default function OrdersPage() {
     window.URL.revokeObjectURL(url);
   };
 
-  // --- RENDER FOR PUBLIC VENDORS (UPDATED VIEW WITH FILTERS) ---
   if (isPublicVendor) {
     return (
       <SidebarProvider
@@ -751,7 +740,6 @@ export default function OrdersPage() {
                 </div>
               </div>
 
-              {/* --- NEW: Filters for Public Vendor --- */}
               <Card className="p-4 bg-muted/10 border shadow-sm">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="space-y-2">
@@ -802,9 +790,7 @@ export default function OrdersPage() {
                   </div>
                 </div>
               </Card>
-              {/* -------------------------------------- */}
 
-              {/* Vendor Purchases Table */}
               <Card className="border shadow-sm">
                 <CardHeader className="pb-3 bg-muted/20">
                   <CardTitle className="text-lg">Recent Orders</CardTitle>
@@ -871,7 +857,6 @@ export default function OrdersPage() {
                               key={purchase._id}
                               className="hover:bg-muted/5"
                             >
-                              {/* Date & ID */}
                               <TableCell className="align-top">
                                 <div className="flex flex-col gap-1">
                                   <span className="font-medium">
@@ -892,7 +877,6 @@ export default function OrdersPage() {
                                 </div>
                               </TableCell>
 
-                              {/* Product Details */}
                               <TableCell className="align-top">
                                 <div className="flex flex-col gap-1">
                                   <span className="font-semibold text-foreground">
@@ -919,7 +903,6 @@ export default function OrdersPage() {
                                 </div>
                               </TableCell>
 
-                              {/* Shipping Information */}
                               <TableCell className="align-top">
                                 <div className="flex flex-col gap-2 text-sm">
                                   <div className="flex items-center gap-2">
@@ -944,7 +927,6 @@ export default function OrdersPage() {
                                 </div>
                               </TableCell>
 
-                              {/* Amount */}
                               <TableCell className="text-right align-top">
                                 <div className="flex flex-col gap-1">
                                   <span className="font-bold">
@@ -958,7 +940,6 @@ export default function OrdersPage() {
                                 </div>
                               </TableCell>
 
-                              {/* Status */}
                               <TableCell className="align-top">
                                 <Select
                                   defaultValue={purchase.status}
@@ -996,7 +977,6 @@ export default function OrdersPage() {
                                 </Select>
                               </TableCell>
 
-                              {/* Documents & Actions */}
                               <TableCell className="align-top">
                                 <div className="flex flex-col gap-2">
                                   <button
@@ -1059,7 +1039,6 @@ export default function OrdersPage() {
     );
   }
 
-  // --- RENDER FOR BUSINESS USERS (Standard View) ---
   return (
     <SidebarProvider
       style={{
@@ -1072,7 +1051,6 @@ export default function OrdersPage() {
         <SiteHeader />
         <div className="flex flex-1 flex-col p-4 lg:p-6">
           <div className="space-y-4">
-            {/* Page Header */}
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-3xl font-bold tracking-tight">Orders</h1>
@@ -1097,7 +1075,6 @@ export default function OrdersPage() {
                   <Download className="mr-2 h-4 w-4" />
                   Export Date Range
                 </Button>
-                {/* NEW: Download Template Button */}
                 <Button variant="outline" onClick={handleDownloadTemplate}>
                   <FileSpreadsheet className="mr-2 h-4 w-4" />
                   Download Update Template
@@ -1136,7 +1113,6 @@ export default function OrdersPage() {
               </div>
             </div>
 
-            {/* Filters */}
             <Card className="p-4">
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div className="space-y-2">
@@ -1221,7 +1197,6 @@ export default function OrdersPage() {
               )}
             </Card>
 
-            {/* Orders Table */}
             <Card className="border-2 shadow-lg">
               <div className="overflow-x-auto">
                 <Table>
@@ -1330,7 +1305,7 @@ export default function OrdersPage() {
                               {formatCurrency(
                                 order.transactionType === "Insertion Fee"
                                   ? Math.abs(order.grossAmount)
-                                  : Math.abs(order.fees),
+                                  : order.fees,
                               )}
                             </span>
                           </TableCell>
@@ -1410,12 +1385,7 @@ export default function OrdersPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             <span className="font-bold text-lg text-green-600 dark:text-green-400">
-                              {formatCurrency(
-                                order.grossAmount -
-                                  Math.abs(order.fees) -
-                                  order.sourcingCost -
-                                  order.shippingCost,
-                              )}
+                              {formatCurrency(order.grossProfit)}
                             </span>
                           </TableCell>
                         </TableRow>
@@ -1426,7 +1396,6 @@ export default function OrdersPage() {
               </div>
             </Card>
 
-            {/* Summary Card */}
             {filteredOrders.length > 0 && (
               <Card className="p-6 border-2 shadow-lg bg-gradient-to-br from-background to-muted/20">
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
@@ -1470,25 +1439,12 @@ export default function OrdersPage() {
                             sum +
                             (o.transactionType === "Insertion Fee"
                               ? Math.abs(o.grossAmount)
-                              : Math.abs(o.fees)),
+                              : o.fees),
                           0,
                         ),
                       )}
                     </p>
                   </div>
-                  {/* <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      Insertion Fees
-                    </p>
-                    <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
-                      {formatCurrency(
-                        filteredOrders.reduce(
-                          (sum, o) => sum + (o.insertionFee || 0),
-                          0
-                        )
-                      )}
-                    </p>
-                  </div> */}
                   <div className="space-y-1">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                       Total Costs
@@ -1522,7 +1478,6 @@ export default function OrdersPage() {
         </div>
       </SidebarInset>
 
-      {/* Upload Progress Dialog - Only for Business Users */}
       <Dialog
         open={uploadProgress.isOpen}
         onOpenChange={(open) =>
@@ -1558,7 +1513,6 @@ export default function OrdersPage() {
               <div className="flex flex-col items-center justify-center space-y-4">
                 <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
 
-                {/* Progress Bar */}
                 <div className="w-full space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">
@@ -1656,7 +1610,6 @@ export default function OrdersPage() {
                   </div>
                 </div>
 
-                {/* Show row-level errors if present */}
                 {uploadProgress.errorDetails.length > 1 && (
                   <div className="rounded-lg border bg-amber-50 p-3">
                     <p className="text-sm font-medium text-amber-700 mb-2">
@@ -1688,7 +1641,6 @@ export default function OrdersPage() {
                   </div>
                 )}
 
-                {/* Show helpful tips */}
                 <div className="rounded-lg border bg-blue-50 p-3">
                   <p className="text-sm font-medium text-blue-700 mb-1">
                     💡 Tips:
@@ -1727,7 +1679,6 @@ export default function OrdersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Export Date Range Dialog */}
       <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
         <DialogContent>
           <DialogHeader>
