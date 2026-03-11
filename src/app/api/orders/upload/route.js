@@ -194,10 +194,24 @@ export async function POST(request) {
     const text = await file.text();
 
     // Clean the text content - remove BOM and normalize line endings
-    const cleanedText = text
+    let cleanedText = text
       .replace(/^\uFEFF/, "") // Remove BOM
       .replace(/\r\n/g, "\n")
       .replace(/\r/g, "\n");
+
+    // --- USA eBay CSV FIX: Strip summary headers ---
+    // eBay USA adds an 11-line summary before the actual CSV columns start.
+    const lines = cleanedText.split("\n");
+    const headerRowIndex = lines.findIndex(
+      (line) =>
+        line.toLowerCase().includes("transaction creation date") ||
+        line.toLowerCase().includes("order number") ||
+        line.toLowerCase().includes("order #"),
+    );
+
+    if (headerRowIndex > 0) {
+      cleanedText = lines.slice(headerRowIndex).join("\n");
+    }
 
     const fileHash = generateFileHash(cleanedText);
 
@@ -206,7 +220,7 @@ export async function POST(request) {
       header: true,
       skipEmptyLines: true,
       delimiter: "", // Auto-detect delimiter
-      transformHeader: (header) => header.trim(), // Keep headers cleaner
+      transformHeader: (header) => header.trim().replace(/^"|"$/g, ""), // Keep headers cleaner
       dynamicTyping: false,
       newline: "\n",
     });
@@ -483,9 +497,23 @@ export async function POST(request) {
         let totalShippingCost = 0;
 
         rows.forEach((r) => {
+          // Check for manual "Shipping Cost" column imports
           const shipExp = getValue(r, "Shipping Cost (Expense)");
           if (shipExp) totalShippingCost += parseFloat(shipExp);
           totalSourcingCost += parseFloat(getValue(r, "Sourcing Cost") || "0");
+
+          // USA EBAY FORMAT FIX: Check for Native eBay "Shipping label" rows and add to shipping costs
+          const rType = (
+            getValue(r, "Type") ||
+            getValue(r, "Transaction type") ||
+            ""
+          )
+            .trim()
+            .toLowerCase();
+          if (rType === "shipping label") {
+            const labelCost = parseFloat(getValue(r, "Net amount") || "0");
+            totalShippingCost += Math.abs(labelCost);
+          }
         });
 
         // Add primary Sale to array
