@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import useSWR from "swr";
 import { useSession } from "next-auth/react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
@@ -55,12 +56,12 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
+// SWR Fetcher function
+const fetcher = (url) => fetch(url).then((res) => res.json());
+
 export default function OrdersPage() {
   const { data: session } = useSession();
-  const [orders, setOrders] = useState([]);
-  const [vendorPurchases, setVendorPurchases] = useState([]);
-  const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const isPublicVendor = session?.user?.role === "public_vendor";
 
   // Filters State
   const [searchTerm, setSearchTerm] = useState("");
@@ -90,93 +91,76 @@ export default function OrdersPage() {
   const [replaceMode, setReplaceMode] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  const isPublicVendor = session?.user?.role === "public_vendor";
+  // --- SWR DATA FETCHING (INSTANT CACHING) ---
 
+  // 1. Fetch Accounts
+  const { data: accountsData } = useSWR(
+    session && !isPublicVendor ? "/api/accounts" : null,
+    fetcher,
+    { keepPreviousData: true },
+  );
+  const accounts = accountsData?.accounts || [];
+
+  // 2. Fetch Standard Orders
+  const queryParams = new URLSearchParams();
+  if (startDate) queryParams.append("startDate", startDate);
+  if (endDate) queryParams.append("endDate", endDate);
+  if (selectedAccount !== "all") queryParams.append("account", selectedAccount);
+
+  const ordersUrl =
+    session && !isPublicVendor ? `/api/orders?${queryParams.toString()}` : null;
+  const {
+    data: ordersData,
+    mutate: mutateOrders,
+    isLoading: isOrdersLoading,
+  } = useSWR(ordersUrl, fetcher, { keepPreviousData: true });
+  const orders = ordersData?.orders || [];
+
+  // 3. Fetch Vendor Purchases
+  const vendorParams = new URLSearchParams();
+  vendorParams.append("forVendor", "true");
+  if (startDate) vendorParams.append("startDate", startDate);
+  if (endDate) vendorParams.append("endDate", endDate);
+  if (statusFilter !== "all") vendorParams.append("status", statusFilter);
+  if (searchTerm) vendorParams.append("search", searchTerm);
+
+  const vendorUrl =
+    session && isPublicVendor
+      ? `/api/vendor-purchases?${vendorParams.toString()}`
+      : null;
+  const {
+    data: vendorData,
+    mutate: mutateVendorPurchases,
+    isLoading: isVendorLoading,
+  } = useSWR(vendorUrl, fetcher, { keepPreviousData: true });
+  const vendorPurchases = vendorData?.purchases || [];
+
+  const loading = isPublicVendor ? isVendorLoading : isOrdersLoading;
+
+  // Recalculate Profit Background Task
   const recalculateGrossProfit = useCallback(async () => {
     try {
       const response = await fetch("/api/orders/recalculate", {
         method: "POST",
       });
       const data = await response.json();
-
       if (response.ok && data.updated > 0) {
-        console.log(`Recalculated gross profit for ${data.updated} orders`);
         localStorage.setItem("grossProfitRecalculated", "true");
+        mutateOrders(); // Silently update UI after calc
       }
     } catch (error) {
       console.error("Failed to recalculate gross profit:", error);
     }
-  }, []);
-
-  const fetchAccounts = useCallback(async () => {
-    try {
-      const response = await fetch("/api/accounts");
-      const data = await response.json();
-
-      if (response.ok) {
-        setAccounts(data.accounts || []);
-      } else {
-        toast.error(data.error || "Failed to fetch accounts");
-      }
-    } catch (error) {
-      console.error("Failed to fetch accounts:", error);
-      toast.error("Error fetching accounts");
-    }
-  }, []);
-
-  const fetchOrders = useCallback(async () => {
-    try {
-      setLoading(true);
-
-      if (session?.user?.role === "public_vendor") {
-        let url = "/api/vendor-purchases?forVendor=true";
-        if (startDate) url += `&startDate=${startDate}`;
-        if (endDate) url += `&endDate=${endDate}`;
-        if (statusFilter !== "all") url += `&status=${statusFilter}`;
-        if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
-
-        const purchasesResponse = await fetch(url);
-        const purchasesData = await purchasesResponse.json();
-
-        if (purchasesResponse.ok) {
-          setVendorPurchases(purchasesData.purchases || []);
-        }
-        setLoading(false);
-        return;
-      }
-
-      let url = "/api/orders?";
-      if (startDate) url += `startDate=${startDate}&`;
-      if (endDate) url += `endDate=${endDate}&`;
-      if (selectedAccount !== "all") url += `account=${selectedAccount}`;
-
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (response.ok) {
-        setOrders(data.orders);
-      } else {
-        toast.error(data.error || "Failed to fetch orders");
-      }
-    } catch (error) {
-      toast.error("An error occurred while fetching orders");
-    } finally {
-      setLoading(false);
-    }
-  }, [startDate, endDate, selectedAccount, statusFilter, searchTerm, session]);
+  }, [mutateOrders]);
 
   useEffect(() => {
-    if (session) {
-      if (session.user.role !== "public_vendor") {
-        fetchAccounts();
-        const hasRecalculated = localStorage.getItem("grossProfitRecalculated");
-        if (!hasRecalculated) {
-          recalculateGrossProfit();
-        }
+    if (session && !isPublicVendor) {
+      const hasRecalculated = localStorage.getItem("grossProfitRecalculated");
+      if (!hasRecalculated) {
+        recalculateGrossProfit();
       }
-      fetchOrders();
     }
-  }, [session, fetchAccounts, fetchOrders, recalculateGrossProfit]);
+  }, [session, isPublicVendor, recalculateGrossProfit]);
 
   useEffect(() => {
     if (accounts.length > 0) {
@@ -194,10 +178,11 @@ export default function OrdersPage() {
   }, [selectedAccount, accounts]);
 
   const handleStatusUpdate = async (orderId, newStatus) => {
-    const previousPurchases = [...vendorPurchases];
-    setVendorPurchases((prev) =>
-      prev.map((p) => (p._id === orderId ? { ...p, status: newStatus } : p)),
+    // Optimistic UI update for instant feedback
+    const updatedPurchases = vendorPurchases.map((p) =>
+      p._id === orderId ? { ...p, status: newStatus } : p,
     );
+    mutateVendorPurchases({ purchases: updatedPurchases }, false);
 
     try {
       const response = await fetch(`/api/vendor-purchases/${orderId}`, {
@@ -209,13 +194,11 @@ export default function OrdersPage() {
       if (response.ok) {
         toast.success(`Order marked as ${newStatus}`);
       } else {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to update");
+        throw new Error("Failed to update");
       }
     } catch (error) {
-      console.error(error);
       toast.error("Failed to update status");
-      setVendorPurchases(previousPurchases);
+      mutateVendorPurchases(); // Revert back to real data on error
     }
   };
 
@@ -448,7 +431,7 @@ export default function OrdersPage() {
               `${data.errors} rows had errors. Check the upload dialog for details.`,
             );
           }
-          fetchOrders();
+          mutateOrders(); // Refresh table via SWR automatically
         } else {
           const errorMessage = data.error || "Upload failed";
           const errorDetails = data.errorDetails || [];
@@ -517,7 +500,7 @@ export default function OrdersPage() {
         setAbortController(null);
       }
     },
-    [selectedAccount, accounts, replaceMode, startDate, endDate, fetchOrders],
+    [selectedAccount, accounts, replaceMode, startDate, endDate, mutateOrders],
   );
 
   const handleCancelUpload = useCallback(() => {
@@ -537,9 +520,28 @@ export default function OrdersPage() {
     [currency],
   );
 
-  const handleCellEdit = useCallback(async (orderId, field, value) => {
+  const handleCellEdit = async (orderId, field, value) => {
+    const parsedValue = parseFloat(value) || 0;
+
+    // Optimistic UI update so it changes visually instantly
+    const updatedOrders = orders.map((order) => {
+      if (order._id === orderId) {
+        const updatedOrder = { ...order, [field]: parsedValue };
+        updatedOrder.grossProfit =
+          updatedOrder.grossAmount -
+          updatedOrder.fees -
+          updatedOrder.sourcingCost -
+          updatedOrder.shippingCost;
+        return updatedOrder;
+      }
+      return order;
+    });
+
+    // Update local cache without triggering a background fetch yet
+    mutateOrders({ orders: updatedOrders }, false);
+    setEditingCell(null);
+
     try {
-      const parsedValue = parseFloat(value) || 0;
       const response = await fetch(`/api/orders/${orderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -547,30 +549,17 @@ export default function OrdersPage() {
       });
 
       if (response.ok) {
-        setOrders((prevOrders) =>
-          prevOrders.map((order) => {
-            if (order._id === orderId) {
-              const updatedOrder = { ...order, [field]: parsedValue };
-              // Calculate real gross profit correctly so the UI updates instantly
-              updatedOrder.grossProfit =
-                updatedOrder.grossAmount -
-                updatedOrder.fees -
-                updatedOrder.sourcingCost -
-                updatedOrder.shippingCost;
-              return updatedOrder;
-            }
-            return order;
-          }),
-        );
         toast.success("Order updated successfully");
+        mutateOrders(); // Final confirmation sync
       } else {
         toast.error("Failed to update order");
+        mutateOrders(); // Revert on failure
       }
     } catch (error) {
       toast.error("Error updating order");
+      mutateOrders(); // Revert on failure
     }
-    setEditingCell(null);
-  }, []);
+  };
 
   const filteredOrders = useMemo(() => {
     if (!searchTerm) return orders;

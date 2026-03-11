@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useSession } from "next-auth/react";
+import Link from "next/link";
 import UserCheck from "lucide-react";
 import Image from "next/image";
 import {
@@ -182,14 +183,14 @@ export function AppSidebar({ ...props }) {
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader className="border-b-0 bg-transparent">
-        <a href="/dashboard">
+        <Link href="/dashboard">
           <img
             src={logoSrc}
             alt="GenieBMS Logo"
             className="w-full h-auto object-contain"
             style={{ marginBottom: "-80px", marginTop: "-80px", width: "100%" }}
           />
-        </a>
+        </Link>
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navItems} />
