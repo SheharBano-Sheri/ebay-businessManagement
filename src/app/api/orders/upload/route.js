@@ -658,6 +658,14 @@ export async function POST(request) {
             const transactionType =
               rType === "other fee" ? "Other fee" : rTypeNative;
 
+            // Grab the original costs if the Sale row is in the same file to properly reverse them
+            const originalSourcing = mainRow
+              ? parseFloat(getValue(mainRow, "Sourcing Cost") || "0")
+              : 0;
+            const originalShipping = mainRow
+              ? parseFloat(getValue(mainRow, "Shipping Cost (Expense)") || "0")
+              : 0;
+
             const orderData = {
               adminId,
               accountId,
@@ -672,8 +680,8 @@ export async function POST(request) {
               fees: rTotalFees,
               netAmount: rTotalNet,
               description: getValue(r, "Description") || "",
-              sourcingCost: 0,
-              shippingCost: 0,
+              sourcingCost: -originalSourcing,
+              shippingCost: -originalShipping,
               grossProfit: rTotalNet, // net is the profit offset mathematically
               currency: account.defaultCurrency || "GBP",
               orderDate,
