@@ -1,25 +1,25 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../auth/[...nextauth]/route';
-import connectDB from '@/lib/mongodb';
-import Message from '@/models/Message';
-import Conversation from '@/models/Conversation';
-import { sendMessageNotificationEmail } from '@/lib/email';
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import connectDB from "@/lib/mongodb";
+import Message from "@/models/Message";
+import Conversation from "@/models/Conversation";
+import { sendMessageNotificationEmail } from "@/lib/email";
 
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { conversationId, content } = await request.json();
 
     if (!conversationId || !content?.trim()) {
       return NextResponse.json(
-        { error: 'Conversation ID and content are required' }, 
-        { status: 400 }
+        { error: "Conversation ID and content are required" },
+        { status: 400 },
       );
     }
 
@@ -30,14 +30,14 @@ export async function POST(request) {
 
     // Get the conversation
     const conversation = await Conversation.findById(conversationId)
-      .populate('ownerId', 'name email')
-      .populate('vendorUserId', 'name email')
-      .populate('vendorId', 'name');
+      .populate("ownerId", "name email")
+      .populate("vendorUserId", "name email")
+      .populate("vendorId", "name");
 
     if (!conversation) {
       return NextResponse.json(
-        { error: 'Conversation not found' }, 
-        { status: 404 }
+        { error: "Conversation not found" },
+        { status: 404 },
       );
     }
 
@@ -47,13 +47,15 @@ export async function POST(request) {
 
     if (!isOwner && !isVendor) {
       return NextResponse.json(
-        { error: 'You are not authorized to send messages in this conversation' }, 
-        { status: 403 }
+        {
+          error: "You are not authorized to send messages in this conversation",
+        },
+        { status: 403 },
       );
     }
 
     // Determine sender type
-    const senderType = isOwner ? 'owner' : 'vendor';
+    const senderType = isOwner ? "owner" : "vendor";
 
     // Create the message
     const message = await Message.create({
@@ -62,13 +64,13 @@ export async function POST(request) {
       senderType,
       content: content.trim(),
       readByOwner: isOwner,
-      readByVendor: isVendor
+      readByVendor: isVendor,
     });
 
     // Update conversation
     const updateData = {
       lastMessageAt: new Date(),
-      lastMessagePreview: content.trim().substring(0, 200)
+      lastMessagePreview: content.trim().substring(0, 200),
     };
 
     if (isOwner) {
@@ -80,36 +82,36 @@ export async function POST(request) {
     await Conversation.findByIdAndUpdate(conversationId, updateData);
 
     // Populate sender info
-    await message.populate('senderId', 'name email');
+    await message.populate("senderId", "name email");
 
     // Send email notification to recipient if they're offline
-    // In a production environment, you'd check if the user is currently connected via Socket.io
     try {
-      const recipient = isOwner ? conversation.vendorUserId : conversation.ownerId;
+      const recipient = isOwner
+        ? conversation.vendorUserId
+        : conversation.ownerId;
       const sender = isOwner ? conversation.ownerId : conversation.vendorUserId;
-      
+
       await sendMessageNotificationEmail({
         to: recipient.email,
         recipientName: recipient.name,
         senderName: sender.name,
         messagePreview: content.trim().substring(0, 100),
-        conversationId: conversationId
+        conversationId: conversationId,
       });
     } catch (emailError) {
-      console.error('Failed to send email notification:', emailError);
+      console.error("Failed to send email notification:", emailError);
       // Don't fail the message send if email fails
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      message 
+    return NextResponse.json({
+      success: true,
+      message,
     });
-
   } catch (error) {
-    console.error('Error sending message:', error);
+    console.error("Error sending message:", error);
     return NextResponse.json(
-      { error: 'Failed to send message' }, 
-      { status: 500 }
+      { error: "Failed to send message" },
+      { status: 500 },
     );
   }
 }
