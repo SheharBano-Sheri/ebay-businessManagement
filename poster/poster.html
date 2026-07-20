@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>eBay Business Management Suite</title>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.0.0-rc.7/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@8.13.3/dist/mermaid.min.js"></script>
+    <style>
+        body { font-family: sans-serif; background-color: #f0f2f5; }
+        #poster {
+            width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 { text-align: center; color: #333; }
+        p { color: #555; line-height: 1.6; }
+        .mermaid { text-align: center; }
+    </style>
+</head>
+<body>
+    <div id="poster">
+        <h1>Streamline Your eBay Business</h1>
+        <p>
+            Our platform provides a comprehensive suite of tools to manage your eBay business efficiently. From order and inventory management to vendor communication and team collaboration, we've got you covered.
+        </p>
+        <div class="mermaid">
+            graph TD
+                A[eBay Seller Signs Up] --> B{Dashboard};
+                B --> C[Manages Orders];
+                B --> D[Manages Inventory];
+                B --> E[Manages Vendors];
+                B --> F[Communicates via Messaging];
+                C --> G{Order Fulfillment};
+                D --> H{Stock Control};
+                E --> I{Vendor Communication};
+                F --> J{Team/Vendor Collaboration};
+        </div>
+        <p>
+            Simplify your workflow, save time, and grow your business with our all-in-one solution.
+        </p>
+    </div>
+    <script>
+        mermaid.initialize({startOnLoad:true});
+        window.onload = function() {
+            html2canvas(document.querySelector("#poster")).then(canvas => {
+                var link = document.createElement('a');
+                link.download = 'ebay-bms-poster.png';
+                link.href = canvas.toDataURL()
+                link.click();
+            });
+        }
+    </script>
+</body>
+</html>

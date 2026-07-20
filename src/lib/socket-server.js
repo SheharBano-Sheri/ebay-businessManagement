@@ -1,6 +1,4 @@
 import { Server } from 'socket.io';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 let io;
 
