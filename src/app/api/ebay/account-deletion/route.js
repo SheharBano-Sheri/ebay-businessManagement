@@ -16,7 +16,9 @@ const VERIFICATION_TOKEN = process.env.EBAY_VERIFICATION_TOKEN;
 
 // This MUST exactly match the endpoint URL you register with eBay,
 // including https:// and the full path, no trailing slash.
-const ENDPOINT_URL = "https://geniebms.com/api/ebay/account-deletion";
+// NOTE: Update this again to https://geniebms.com/api/ebay/account-deletion
+// once the custom domain is connected, and re-register in the eBay portal.
+const ENDPOINT_URL = "https://ebay-business-management.vercel.app/api/ebay/account-deletion";
 
 // --- GET: handles eBay's verification challenge ---
 export async function GET(request) {
