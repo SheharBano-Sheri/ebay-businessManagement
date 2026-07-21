@@ -21,6 +21,24 @@ const AccountSchema = new mongoose.Schema({
   apiKey: {
     type: String
   },
+  // eBay OAuth integration fields
+  // TODO: Consider encrypting ebayRefreshToken at rest once the integration is proven in production.
+  ebayRefreshToken: {
+    type: String,
+    default: null   // long-lived OAuth refresh token; populated by /api/ebay/callback
+  },
+  ebayAccessToken: {
+    type: String,
+    default: null   // cached short-lived access token; refreshed automatically before API calls
+  },
+  ebayAccessTokenExpiry: {
+    type: Date,
+    default: null   // UTC expiry of the cached access token
+  },
+  ebayConnectedAt: {
+    type: Date,
+    default: null   // when the seller first completed the OAuth consent flow
+  },
   isActive: {
     type: Boolean,
     default: true
