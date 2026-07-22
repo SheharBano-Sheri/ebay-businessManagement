@@ -125,10 +125,23 @@ export async function refreshAccessToken(account) {
 // ---------------------------------------------------------------------------
 export async function exchangeCodeForTokens(authCode) {
   const ruName = process.env.EBAY_RUNAME;
+  const appId  = process.env.EBAY_APP_ID;
+  const certId = process.env.EBAY_CERT_ID;
 
   if (!ruName) {
     throw new Error('EBAY_RUNAME environment variable is not set.');
   }
+
+  // ── TEMPORARY DEBUG — server-side only, remove after resolving 401 ─────────
+  console.log('[eBay OAuth debug] EBAY_APP_ID  length:', appId  ? appId.length  : 'MISSING/EMPTY');
+  console.log('[eBay OAuth debug] EBAY_CERT_ID length:', certId ? certId.length : 'MISSING/EMPTY');
+  console.log('[eBay OAuth debug] EBAY_RUNAME  value:', ruName);
+  console.log('[eBay OAuth debug] Token endpoint:', EBAY_OAUTH_URL);
+  if (appId && certId) {
+    const testEncoded = Buffer.from(`${appId}:${certId}`).toString('base64');
+    console.log('[eBay OAuth debug] Encoded credential first 20 chars:', testEncoded.slice(0, 20) + '...');
+  }
+  // ── END TEMPORARY DEBUG ────────────────────────────────────────────────────
 
   const body = new URLSearchParams({
     grant_type:   'authorization_code',

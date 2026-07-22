@@ -398,6 +398,168 @@ function SettingsContent() {
                 </Card>
               </TabsContent>
 
+              {/* eBay Integration Tab */}
+              <TabsContent value="ebay" className="space-y-4">
+                {/* Account selector */}
+                {accounts.length > 1 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <ShoppingBag className="h-5 w-5" />
+                        Select Account
+                      </CardTitle>
+                      <CardDescription>
+                        Choose which eBay seller account to manage
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
+                        <SelectTrigger className="w-full max-w-xs">
+                          <SelectValue placeholder="Select an account" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {accounts.map((acc) => (
+                            <SelectItem key={acc._id} value={acc._id}>
+                              {acc.accountName} {acc.ebayUsername ? `(${acc.ebayUsername})` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Connection Status Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Link2 className="h-5 w-5" />
+                      eBay Account Connection
+                    </CardTitle>
+                    <CardDescription>
+                      Connect your eBay seller account to enable live order sync
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {accounts.length === 0 ? (
+                      <div className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+                        <XCircle className="h-5 w-5 text-amber-600 shrink-0" />
+                        <div>
+                          <p className="font-medium text-amber-800 dark:text-amber-300">No accounts found</p>
+                          <p className="text-sm text-muted-foreground">
+                            Please create an eBay account first in the{" "}
+                            <a href="/dashboard/accounts" className="underline text-primary">Accounts</a> page.
+                          </p>
+                        </div>
+                      </div>
+                    ) : selectedAccount?.ebayRefreshToken ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
+                          <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+                          <div className="flex-1">
+                            <p className="font-medium text-emerald-800 dark:text-emerald-300">eBay account connected</p>
+                            {selectedAccount?.ebayUsername && (
+                              <p className="text-sm text-muted-foreground">Username: {selectedAccount.ebayUsername}</p>
+                            )}
+                            {selectedAccount?.ebayConnectedAt && (
+                              <p className="text-xs text-muted-foreground">
+                                Connected {new Date(selectedAccount.ebayConnectedAt).toLocaleDateString()}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            className="gap-2 text-destructive hover:bg-destructive/10 border-destructive/30"
+                            disabled={disconnectingEbay}
+                            onClick={() => handleDisconnectEbay(selectedAccount?._id)}
+                          >
+                            {disconnectingEbay ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Unlink className="h-4 w-4" />
+                            )}
+                            {disconnectingEbay ? "Disconnecting..." : "Disconnect"}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+                          <XCircle className="h-5 w-5 text-amber-600 shrink-0" />
+                          <div>
+                            <p className="font-medium text-amber-800 dark:text-amber-300">Not connected</p>
+                            <p className="text-sm text-muted-foreground">
+                              Authorize GenieBMS to access your eBay seller data
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          className="gap-2"
+                          onClick={() => handleConnectEbay(selectedAccount?._id)}
+                        >
+                          <Link2 className="h-4 w-4" />
+                          Connect eBay Account
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Sync Orders Card */}
+                {selectedAccount?.ebayRefreshToken && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <RefreshCw className="h-5 w-5" />
+                        Sync Orders from eBay
+                      </CardTitle>
+                      <CardDescription>
+                        Pull the latest orders and transaction data from eBay into GenieBMS (last 30 days)
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {syncResult && (
+                        <Alert className={syncResult.type === "success"
+                          ? "border-emerald-500/30 bg-emerald-500/10"
+                          : "border-destructive/30 bg-destructive/10"
+                        }>
+                          {syncResult.type === "success" ? (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-destructive" />
+                          )}
+                          <AlertDescription className={syncResult.type === "success"
+                            ? "text-emerald-800 dark:text-emerald-300"
+                            : "text-destructive"
+                          }>
+                            {syncResult.message}
+                            {syncResult.type === "success" && syncResult.details && (
+                              <span className="block text-xs text-muted-foreground mt-1">
+                                Skipped: {syncResult.details.skipped || 0} · Errors: {syncResult.details.errors || 0}
+                              </span>
+                            )}
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      <Button
+                        onClick={() => handleSyncEbay(selectedAccount?._id)}
+                        disabled={syncingEbay}
+                        className="gap-2"
+                      >
+                        {syncingEbay ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4" />
+                        )}
+                        {syncingEbay ? "Syncing orders from eBay..." : "Sync Now"}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
               {/* Vendor Settings Tab (Only for Public Vendors) */}
               {session?.user?.role === "public_vendor" && (
                 <TabsContent value="vendor" className="space-y-4">
