@@ -11,11 +11,9 @@
 // rather than `getOrderEarningsById`, because getOrderEarningsById is restricted to US/China/
 // Hong Kong sellers only. getTransactions is not geo-restricted and works for all seller locales.
 //
-// NOTE on domain TODO: The redirect_uri used in refreshAccessToken must match the RuName configured
-// in the eBay developer portal. Currently configured for:
-//   https://ebay-business-management.vercel.app/api/ebay/callback
-// TODO: Once the custom domain https://geniebms.com is connected in Vercel, update EBAY_RUNAME
-// in the eBay developer portal and in your .env.local / Vercel env vars to match the new domain.
+// NOTE on domain: The redirect_uri used in refreshAccessToken must match the RuName configured
+// in the eBay developer portal. Configured for:
+//   https://www.geniebms.com/api/ebay/callback
 
 import Account from '@/models/Account';
 import connectDB from '@/lib/mongodb';

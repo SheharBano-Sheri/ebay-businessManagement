@@ -12,11 +12,11 @@ EMAIL_PORT=587
 EMAIL_USER=Onboarding@geniebms.com
 EMAIL_PASSWORD=KDhtN7U018QH
 APP_NAME=Genie Business Management System
-NEXTAUTH_URL=https://geniebms.com
+NEXTAUTH_URL=https://www.geniebms.com
 ```
 
 ✅ **Sender Email**: All invitation emails will be sent from **Onboarding@geniebms.com**  
-✅ **Production URL**: Set to **https://geniebms.com**
+✅ **Production URL**: Set to **https://www.geniebms.com**
 
 ---
 
@@ -58,7 +58,7 @@ When the member clicks the signup link:
 
 ### Step 5: Member Access
 After signup, team members can:
-- ✅ Sign in to https://geniebms.com
+- ✅ Sign in to https://www.geniebms.com
 - ✅ Access only the dashboard pages you allowed
 - ✅ Collaborate on your business data (orders, inventory, etc.)
 - ✅ Use the system without their own subscription
@@ -152,7 +152,7 @@ Your invitation emails include:
 
 ### For Production:
 Your `.env.local` is already configured for production with:
-- ✅ Production domain: https://geniebms.com
+- ✅ Production domain: https://www.geniebms.com
 - ✅ Professional email: Onboarding@geniebms.com
 - ✅ Zoho SMTP configured
 
@@ -176,7 +176,7 @@ Just deploy your app to production and it will work automatically!
 
 ✅ Zoho email configured  
 ✅ Sender email: Onboarding@geniebms.com  
-✅ Production URL: https://geniebms.com  
+✅ Production URL: https://www.geniebms.com  
 ✅ Team invitations ready to send  
 ✅ Members sign up for free  
 ✅ Permission-based access control  

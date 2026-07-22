@@ -9,12 +9,8 @@
 // After the seller grants access, eBay redirects back to /api/ebay/callback
 // (the RuName callback URL) with an authorization_code.
 //
-// NOTE on domain TODO: The Auth Accepted URL registered with eBay is currently:
-//   https://ebay-business-management.vercel.app/api/ebay/callback
-// TODO: Once the custom domain https://geniebms.com is connected in Vercel/DNS,
-// update the RuName "Auth accepted URL" in the eBay developer portal to:
-//   https://geniebms.com/api/ebay/callback
-// and update EBAY_RUNAME in .env.local + Vercel env vars to match.
+// NOTE on domain: The Auth Accepted URL registered with eBay is:
+//   https://www.geniebms.com/api/ebay/callback
 //
 // NOTE on CSRF: The `state` parameter is currently the plain accountId string.
 // TODO: For hardened production, sign the state with a short-lived HMAC so

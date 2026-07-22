@@ -17,13 +17,8 @@
 //   with an error query param so the UI can surface a friendly message.
 //
 // Registered callback URLs in the eBay developer portal RuName:
-//   Auth accepted URL: https://ebay-business-management.vercel.app/api/ebay/callback
-//   Auth declined URL: https://ebay-business-management.vercel.app/login
-// TODO: Once the custom domain https://geniebms.com is connected in Vercel/DNS,
-// update the RuName callback URLs in the eBay developer portal to:
-//   Auth accepted URL: https://geniebms.com/api/ebay/callback
-//   Auth declined URL: https://geniebms.com/login
-// and update EBAY_RUNAME in .env.local + Vercel env vars accordingly.
+//   Auth accepted URL: https://www.geniebms.com/api/ebay/callback
+//   Auth declined URL: https://www.geniebms.com/login
 
 import { NextResponse }   from 'next/server';
 import { getServerSession } from 'next-auth';
@@ -112,7 +107,7 @@ export async function GET(request) {
     // 7. Redirect the seller to the dashboard with a success indicator.
     //    The frontend can read ?ebay_connected=1 and display a confirmation toast.
     return NextResponse.redirect(
-      new URL('/?ebay_connected=1', request.url)
+      new URL('/dashboard/accounts?ebay_connected=1', request.url)
     );
 
   } catch (error) {

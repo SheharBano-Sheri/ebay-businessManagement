@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -35,16 +36,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Edit, Trash2, CreditCard } from "lucide-react";
+import { Plus, Edit, Trash2, CreditCard, Link2, Unlink, RefreshCw, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
-export default function AccountsPage() {
+function AccountsContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
+  const [syncingAccountId, setSyncingAccountId] = useState(null);
+  const [disconnectingAccountId, setDisconnectingAccountId] = useState(null);
 
   const [formData, setFormData] = useState({
     accountName: "",
@@ -64,6 +68,15 @@ export default function AccountsPage() {
       fetchAccounts();
     }
   }, [status]);
+
+  useEffect(() => {
+    if (searchParams?.get("ebay_connected") === "1") {
+      toast.success("eBay Account connected successfully!");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("ebay_connected");
+      window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+    }
+  }, [searchParams]);
 
   const fetchAccounts = async () => {
     try {
@@ -190,6 +203,54 @@ export default function AccountsPage() {
     } catch (error) {
       console.error("Error deleting account:", error);
       toast.error("Failed to delete account");
+    }
+  };
+
+  const handleConnect = (accountId) => {
+    window.location.href = `/api/ebay/connect?accountId=${accountId}`;
+  };
+
+  const handleDisconnect = async (accountId) => {
+    setDisconnectingAccountId(accountId);
+    try {
+      const res = await fetch("/api/ebay/disconnect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("eBay account disconnected successfully");
+        await fetchAccounts();
+      } else {
+        toast.error(data.error || "Failed to disconnect account");
+      }
+    } catch (err) {
+      toast.error("Error disconnecting eBay account");
+    } finally {
+      setDisconnectingAccountId(null);
+    }
+  };
+
+  const handleSyncNow = async (accountId) => {
+    setSyncingAccountId(accountId);
+    try {
+      const res = await fetch("/api/orders/sync-ebay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId, daysBack: 30 }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const msg = data.message || `Imported ${data.imported || 0} new orders, updated ${data.updated || 0} existing orders`;
+        toast.success(msg);
+      } else {
+        toast.error(data.error || "Failed to sync orders from eBay");
+      }
+    } catch (err) {
+      toast.error("Error syncing with eBay: " + err.message);
+    } finally {
+      setSyncingAccountId(null);
     }
   };
 
@@ -397,13 +458,14 @@ export default function AccountsPage() {
                       <TableHead className="font-bold border-r">ACCOUNT NAME</TableHead>
                       <TableHead className="font-bold border-r">EBAY USERNAME</TableHead>
                       <TableHead className="font-bold border-r">DEFAULT CURRENCY</TableHead>
+                      <TableHead className="font-bold border-r">EBAY INTEGRATION</TableHead>
                       <TableHead className="font-bold">ACTIONS</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center py-8">
+                        <TableCell colSpan={5} className="text-center py-8">
                           <div className="flex flex-col items-center gap-2">
                             <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
                             <span className="text-muted-foreground">Loading accounts...</span>
@@ -412,7 +474,7 @@ export default function AccountsPage() {
                       </TableRow>
                     ) : accounts.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center py-12">
+                        <TableCell colSpan={5} className="text-center py-12">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
                             <CreditCard className="h-12 w-12 opacity-50" />
                             <p className="text-lg font-medium">No accounts added yet</p>
@@ -434,6 +496,59 @@ export default function AccountsPage() {
                           <TableCell className="border-r font-medium">{account.ebayUsername || "-"}</TableCell>
                           <TableCell className="border-r">
                             <span className="font-mono font-semibold text-blue-600 dark:text-blue-400">{account.defaultCurrency}</span>
+                          </TableCell>
+                          <TableCell className="border-r">
+                            {account.ebayRefreshToken ? (
+                              <div className="flex items-center gap-2">
+                                <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1 text-xs">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  Connected
+                                </Badge>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 gap-1 text-xs"
+                                  disabled={syncingAccountId === account._id}
+                                  onClick={() => handleSyncNow(account._id)}
+                                >
+                                  {syncingAccountId === account._id ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <RefreshCw className="h-3 w-3" />
+                                  )}
+                                  Sync Now
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 text-xs text-destructive hover:bg-destructive/10"
+                                  disabled={disconnectingAccountId === account._id}
+                                  onClick={() => handleDisconnect(account._id)}
+                                >
+                                  {disconnectingAccountId === account._id ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Unlink className="h-3 w-3" />
+                                  )}
+                                  Disconnect
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 gap-1 text-xs">
+                                  <XCircle className="h-3 w-3" />
+                                  Not Connected
+                                </Badge>
+                                <Button
+                                  size="sm"
+                                  className="h-8 gap-1 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                                  onClick={() => handleConnect(account._id)}
+                                >
+                                  <Link2 className="h-3 w-3" />
+                                  Connect eBay
+                                </Button>
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-2">
@@ -468,11 +583,11 @@ export default function AccountsPage() {
               <div className="flex gap-4">
                 <div className="text-muted-foreground">💡</div>
                 <div>
-                  <h3 className="font-semibold mb-2">About eBay Accounts</h3>
+                  <h3 className="font-semibold mb-2">About eBay Integration</h3>
                   <p className="text-sm text-muted-foreground">
                     Connect multiple eBay seller accounts to manage all your stores from one dashboard.
-                    Each account can have its own currency and settings. Orders, inventory, and analytics
-                    will be tracked separately for each account.
+                    Click <strong>Connect eBay</strong> on any account to authorize OAuth access.
+                    Once connected, use <strong>Sync Now</strong> to pull live orders and financial data directly from eBay.
                   </p>
                 </div>
               </div>
@@ -481,5 +596,17 @@ export default function AccountsPage() {
         </div>
       </SidebarInset>
     </SidebarProvider>
+  );
+}
+
+export default function AccountsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      </div>
+    }>
+      <AccountsContent />
+    </Suspense>
   );
 }

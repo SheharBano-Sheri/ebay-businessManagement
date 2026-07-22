@@ -14,10 +14,8 @@ import { NextResponse } from "next/server";
 // developer portal when setting up the notification subscription.
 const VERIFICATION_TOKEN = process.env.EBAY_VERIFICATION_TOKEN;
 
-// This MUST exactly match the endpoint URL you register with eBay,
-// including https:// and the full path, no trailing slash.
-// Using www subdomain since the apex domain (geniebms.com) DNS isn't
-// fully configured yet in Vercel/Cloudflare. www.geniebms.com works.
+// This MUST exactly match the endpoint URL registered in the eBay Developer Portal,
+// including https:// and the full path with no trailing slash.
 const ENDPOINT_URL = "https://www.geniebms.com/api/ebay/account-deletion";
 
 // --- GET: handles eBay's verification challenge ---

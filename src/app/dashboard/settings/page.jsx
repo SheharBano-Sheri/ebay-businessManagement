@@ -24,6 +24,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   User,
   Mail,
   CreditCard,
@@ -31,6 +38,13 @@ import {
   LogOut,
   Users,
   Store,
+  RefreshCw,
+  Link2,
+  Unlink,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  ShoppingBag,
 } from "lucide-react";
 
 function SettingsContent() {
@@ -56,6 +70,109 @@ function SettingsContent() {
     newPassword: "",
     confirmPassword: "",
   });
+
+  // eBay Integration state
+  const [accounts, setAccounts] = useState([]);
+  const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [syncingEbay, setSyncingEbay] = useState(false);
+  const [disconnectingEbay, setDisconnectingEbay] = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
+
+  useEffect(() => {
+    fetchAccounts();
+  }, []);
+
+  useEffect(() => {
+    if (searchParams.get("ebay_connected") === "1") {
+      toast.success("eBay Account connected successfully!");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("ebay_connected");
+      window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+    }
+  }, [searchParams]);
+
+  const fetchAccounts = async () => {
+    try {
+      const res = await fetch("/api/accounts");
+      const data = await res.json();
+      if (res.ok && data.accounts) {
+        setAccounts(data.accounts);
+        if (data.accounts.length > 0 && !selectedAccountId) {
+          setSelectedAccountId(data.accounts[0]._id);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch accounts:", err);
+    }
+  };
+
+  const selectedAccount = accounts.find((acc) => acc._id === selectedAccountId) || accounts[0];
+
+  const handleConnectEbay = (accId) => {
+    const id = accId || selectedAccountId;
+    if (!id) {
+      toast.error("Please select or create an account first");
+      return;
+    }
+    window.location.href = `/api/ebay/connect?accountId=${id}`;
+  };
+
+  const handleDisconnectEbay = async (accId) => {
+    const id = accId || selectedAccountId;
+    if (!id) return;
+    setDisconnectingEbay(true);
+    try {
+      const res = await fetch("/api/ebay/disconnect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId: id }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("eBay account disconnected successfully");
+        await fetchAccounts();
+      } else {
+        toast.error(data.error || "Failed to disconnect account");
+      }
+    } catch (err) {
+      toast.error("Error disconnecting eBay account");
+    } finally {
+      setDisconnectingEbay(false);
+    }
+  };
+
+  const handleSyncEbay = async (accId) => {
+    const id = accId || selectedAccountId;
+    if (!id) {
+      toast.error("Please select an account first");
+      return;
+    }
+    setSyncingEbay(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch("/api/orders/sync-ebay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId: id, daysBack: 30 }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const msg = data.message || `Imported ${data.imported || 0} new orders, updated ${data.updated || 0} existing orders`;
+        setSyncResult({ type: "success", message: msg, details: data });
+        toast.success(msg);
+      } else {
+        const errMsg = data.error || "Failed to sync orders from eBay";
+        setSyncResult({ type: "error", message: errMsg });
+        toast.error(errMsg);
+      }
+    } catch (err) {
+      const errMsg = "Error syncing with eBay: " + err.message;
+      setSyncResult({ type: "error", message: errMsg });
+      toast.error(errMsg);
+    } finally {
+      setSyncingEbay(false);
+    }
+  };
 
   useEffect(() => {
     if (session?.user?.role === "public_vendor") {
@@ -204,6 +321,7 @@ function SettingsContent() {
             <Tabs defaultValue={defaultTab} className="space-y-4">
               <TabsList>
                 <TabsTrigger value="account">Account</TabsTrigger>
+                <TabsTrigger value="ebay">eBay Integration</TabsTrigger>
                 {session?.user?.role === "public_vendor" && (
                   <TabsTrigger value="vendor">Vendor</TabsTrigger>
                 )}
