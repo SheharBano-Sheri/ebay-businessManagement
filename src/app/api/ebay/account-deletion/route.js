@@ -16,7 +16,9 @@ const VERIFICATION_TOKEN = process.env.EBAY_VERIFICATION_TOKEN;
 
 // This MUST exactly match the endpoint URL you register with eBay,
 // including https:// and the full path, no trailing slash.
-const ENDPOINT_URL = "https://geniebms.com/api/ebay/account-deletion";
+// Using www subdomain since the apex domain (geniebms.com) DNS isn't
+// fully configured yet in Vercel/Cloudflare. www.geniebms.com works.
+const ENDPOINT_URL = "https://www.geniebms.com/api/ebay/account-deletion";
 
 // --- GET: handles eBay's verification challenge ---
 export async function GET(request) {
