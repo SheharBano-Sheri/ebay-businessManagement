@@ -45,12 +45,16 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Account not found' }, { status: 404 });
     }
 
-    // Clear stored eBay tokens
-    account.ebayRefreshToken = null;
-    account.ebayAccessToken = null;
+    // Clear all stored eBay tokens and status flags.
+    // needsReconnect and ebayLastSyncedAt are reset so the UI shows a clean
+    // "Not Connected" state rather than stale Phase 3/4 indicators.
+    account.ebayRefreshToken      = null;
+    account.ebayAccessToken       = null;
     account.ebayAccessTokenExpiry = null;
-    account.ebayConnectedAt = null;
-    account.updatedAt = new Date();
+    account.ebayConnectedAt       = null;
+    account.needsReconnect        = false;
+    account.ebayLastSyncedAt      = null;
+    account.updatedAt             = new Date();
     await account.save();
 
     return NextResponse.json({

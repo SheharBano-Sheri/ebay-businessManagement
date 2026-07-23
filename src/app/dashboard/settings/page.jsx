@@ -45,7 +45,32 @@ import {
   XCircle,
   Loader2,
   ShoppingBag,
+  AlertTriangle,
+  Activity,
+  Clock,
+  TrendingUp,
 } from "lucide-react";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns a human-readable relative label for an ebayLastSyncedAt timestamp.
+ * e.g. "just now", "5 minutes ago", "3 hours ago", "2 days ago".
+ * Returns "Never" when the value is null/undefined.
+ */
+function formatLastSynced(date) {
+  if (!date) return 'Never';
+  const diffMs      = Date.now() - new Date(date).getTime();
+  const diffMinutes = Math.floor(diffMs / 60_000);
+  const diffHours   = Math.floor(diffMs / 3_600_000);
+  const diffDays    = Math.floor(diffMs / 86_400_000);
+  if (diffMinutes < 1)   return 'just now';
+  if (diffMinutes < 60)  return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+  if (diffHours   < 24)  return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+  return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+}
 
 function SettingsContent() {
   const { data: session } = useSession();
@@ -78,8 +103,30 @@ function SettingsContent() {
   const [disconnectingEbay, setDisconnectingEbay] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
 
+  // eBay Sync Health state
+  const [healthData, setHealthData] = useState([]);
+  const [loadingHealth, setLoadingHealth] = useState(false);
+  const [apiStats, setApiStats] = useState(null);
+
+  const fetchSyncHealth = async () => {
+    setLoadingHealth(true);
+    try {
+      const res = await fetch("/api/ebay/sync-health");
+      const data = await res.json();
+      if (res.ok) {
+        setHealthData(data.accounts || []);
+        setApiStats(data.apiStats || null);
+      }
+    } catch (err) {
+      console.error("Failed to fetch sync health:", err);
+    } finally {
+      setLoadingHealth(false);
+    }
+  };
+
   useEffect(() => {
     fetchAccounts();
+    fetchSyncHealth();
   }, []);
 
   useEffect(() => {
@@ -452,7 +499,50 @@ function SettingsContent() {
                           </p>
                         </div>
                       </div>
+                    ) : selectedAccount?.needsReconnect ? (
+                      /* ── Reconnect Required ── */
+                      <div className="space-y-4">
+                        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+                          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <p className="font-medium text-amber-800 dark:text-amber-300">Reconnect required</p>
+                            <p className="text-sm text-muted-foreground">
+                              The eBay authorisation for{" "}
+                              <strong>{selectedAccount.accountName}</strong> has expired or been revoked.
+                              Re-authorise to resume automatic syncing.
+                            </p>
+                            {selectedAccount?.ebayLastSyncedAt && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Last synced: {formatLastSynced(selectedAccount.ebayLastSyncedAt)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            className="gap-2 bg-amber-600 hover:bg-amber-700 text-white"
+                            onClick={() => handleConnectEbay(selectedAccount?._id)}
+                          >
+                            <Link2 className="h-4 w-4" />
+                            Reconnect eBay Account
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="gap-2 text-destructive hover:bg-destructive/10 border-destructive/30"
+                            disabled={disconnectingEbay}
+                            onClick={() => handleDisconnectEbay(selectedAccount?._id)}
+                          >
+                            {disconnectingEbay ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Unlink className="h-4 w-4" />
+                            )}
+                            {disconnectingEbay ? "Disconnecting..." : "Disconnect"}
+                          </Button>
+                        </div>
+                      </div>
                     ) : selectedAccount?.ebayRefreshToken ? (
+                      /* ── Connected ── */
                       <div className="space-y-4">
                         <div className="flex items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
                           <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
@@ -466,6 +556,9 @@ function SettingsContent() {
                                 Connected {new Date(selectedAccount.ebayConnectedAt).toLocaleDateString()}
                               </p>
                             )}
+                            <p className="text-xs text-muted-foreground">
+                              Last synced: {formatLastSynced(selectedAccount?.ebayLastSyncedAt)}
+                            </p>
                           </div>
                         </div>
                         <div className="flex gap-2">
@@ -558,6 +651,164 @@ function SettingsContent() {
                     </CardContent>
                   </Card>
                 )}
+
+                {/* Sync Health Card */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Activity className="h-5 w-5" />
+                        <div>
+                          <CardTitle>Sync Health</CardTitle>
+                          <CardDescription>
+                            Last sync result and error history per account
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        disabled={loadingHealth}
+                        onClick={fetchSyncHealth}
+                      >
+                        {loadingHealth ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        )}
+                        Refresh
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {/* API call advisory */}
+                    {apiStats?.approaching && (
+                      <Alert className="border-amber-500/30 bg-amber-500/10">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <AlertDescription className="text-amber-800 dark:text-amber-300">
+                          <strong>API limit advisory:</strong> {apiStats.callsToday}/{apiStats.limit} eBay API calls used today.
+                          Approaching the daily limit — syncing may slow down.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {loadingHealth && healthData.length === 0 ? (
+                      <div className="flex items-center gap-2 py-4 text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="text-sm">Loading health data...</span>
+                      </div>
+                    ) : healthData.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-2">
+                        No sync history yet. Run a sync to see health data.
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {healthData.map((acct) => (
+                          <div
+                            key={acct.accountId}
+                            className="rounded-lg border p-3 space-y-2"
+                          >
+                            {/* Account header row */}
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-sm">{acct.accountName}</p>
+                                {acct.ebayUsername && (
+                                  <span className="text-xs text-muted-foreground">({acct.ebayUsername})</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                {acct.needsReconnect ? (
+                                  <>
+                                    <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 gap-1 text-xs">
+                                      <AlertTriangle className="h-3 w-3" />
+                                      Reconnect Required
+                                    </Badge>
+                                    <Button
+                                      size="sm"
+                                      className="h-6 text-xs px-2 bg-amber-600 hover:bg-amber-700 text-white"
+                                      onClick={() => handleConnectEbay(acct.accountId)}
+                                    >
+                                      Reconnect
+                                    </Button>
+                                  </>
+                                ) : acct.isConnected ? (
+                                  <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1 text-xs">
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    Connected
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 gap-1 text-xs">
+                                    <XCircle className="h-3 w-3" />
+                                    Not Connected
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Sync stats row */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
+                              {/* Last synced */}
+                              <div className="flex items-center gap-1.5 text-muted-foreground">
+                                <Clock className="h-3 w-3 shrink-0" />
+                                <span>Last synced: {formatLastSynced(acct.ebayLastSyncedAt)}</span>
+                              </div>
+
+                              {/* Last sync result */}
+                              {acct.lastSync ? (
+                                acct.lastSync.status === "success" ? (
+                                  <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                                    <CheckCircle2 className="h-3 w-3 shrink-0" />
+                                    <span>
+                                      Last {acct.lastSync.trigger}: {acct.lastSync.imported} imported,{" "}
+                                      {acct.lastSync.updated} updated
+                                      {acct.lastSync.durationMs && (
+                                        <span className="text-muted-foreground"> ({(acct.lastSync.durationMs / 1000).toFixed(1)}s)</span>
+                                      )}
+                                    </span>
+                                  </div>
+                                ) : acct.lastSync.status === "error" ? (
+                                  <div className="flex items-center gap-1.5 text-destructive">
+                                    <XCircle className="h-3 w-3 shrink-0" />
+                                    <span className="truncate" title={acct.lastSync.errorMessage}>
+                                      {acct.lastSync.errorType || "Error"}: {(acct.lastSync.errorMessage || "").slice(0, 60)}{acct.lastSync.errorMessage?.length > 60 ? "…" : ""}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                                    <TrendingUp className="h-3 w-3 shrink-0" />
+                                    <span>Last {acct.lastSync.trigger}: skipped</span>
+                                  </div>
+                                )
+                              ) : (
+                                <div className="flex items-center gap-1.5 text-muted-foreground">
+                                  <span>No sync history</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Prior error (when distinct from the last sync) */}
+                            {acct.lastError && (
+                              <div className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-500/10 rounded px-2 py-1">
+                                <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                                <span className="truncate" title={acct.lastError.errorMessage}>
+                                  Prior error ({acct.lastError.errorType}): {(acct.lastError.errorMessage || "").slice(0, 80)}{acct.lastError.errorMessage?.length > 80 ? "…" : ""}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* API call stats (informational) */}
+                    {apiStats && !apiStats.approaching && (
+                      <p className="text-xs text-muted-foreground pt-1">
+                        eBay API calls today: {apiStats.callsToday}/{apiStats.limit}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               {/* Vendor Settings Tab (Only for Public Vendors) */}

@@ -97,6 +97,7 @@ export async function GET(request) {
       ebayAccessToken:       accessToken,
       ebayAccessTokenExpiry: accessTokenExpiry,
       ebayConnectedAt:       new Date(),
+      needsReconnect:        false,   // clear any prior reconnect warning
       updatedAt:             new Date(),
     });
 

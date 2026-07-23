@@ -502,7 +502,8 @@ export async function POST(request) {
           if (shipExp) totalShippingCost += parseFloat(shipExp);
           totalSourcingCost += parseFloat(getValue(r, "Sourcing Cost") || "0");
 
-          // USA EBAY FORMAT FIX: Check for Native eBay "Shipping label" rows and add to shipping costs
+          // EBAY FORMAT FIX: Capture native eBay postage/shipping label rows as shipping costs.
+          // US eBay uses "Shipping label"; UK eBay uses "Postage label" — handle both.
           const rType = (
             getValue(r, "Type") ||
             getValue(r, "Transaction type") ||
@@ -510,7 +511,7 @@ export async function POST(request) {
           )
             .trim()
             .toLowerCase();
-          if (rType === "shipping label") {
+          if (rType === "shipping label" || rType === "postage label") {
             const labelCost = parseFloat(getValue(r, "Net amount") || "0");
             totalShippingCost += Math.abs(labelCost);
           }
@@ -627,12 +628,15 @@ export async function POST(request) {
           }
         }
 
-        // 2. Process Returns, Refunds, Claims, Cancellations, Holds
+        // 2. Process Returns, Refunds, Claims, Cancellations
+        // NOTE: "hold" is intentionally excluded. eBay emits paired Hold rows
+        // (one positive "Hold placed", one negative "Hold released") that net to
+        // zero. Storing them as records causes double-counting. They are purely
+        // internal eBay bookkeeping and carry no net financial impact.
         const specialTypes = [
           "refund",
           "claim",
           "cancellation",
-          "hold",
           "dispute",
           "return",
         ];

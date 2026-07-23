@@ -19,7 +19,7 @@
 //   }
 //
 // Response:
-//   { message, imported, updated, skipped, errors, errorDetails, success }
+//   { message, imported, updated, skipped, errors, errorDetails, success, needsReconnect? }
 
 import { NextResponse }    from 'next/server';
 import { getServerSession }  from 'next-auth';
@@ -28,6 +28,7 @@ import connectDB           from '@/lib/mongodb';
 import EbayOrder           from '@/models/EbayOrder';
 import Account             from '@/models/Account';
 import Product             from '@/models/Product';
+import SyncLog             from '@/models/SyncLog';
 import User                from '@/models/User';
 import { checkPermission } from '@/lib/permissions';
 import {
@@ -35,9 +36,39 @@ import {
   getOrders,
   getTransactions,
   buildOrderData,
+  clearStaleTokens,
+  getApiCallStats,
+  EbayAuthError,
+  EbayRateLimitError,
 } from '@/lib/ebayFinancesApi';
 
+// ---------------------------------------------------------------------------
+// Helper: classify an error into a SyncLog errorType string
+// ---------------------------------------------------------------------------
+function classifyError(err) {
+  if (err instanceof EbayAuthError)      return 'auth_error';
+  if (err instanceof EbayRateLimitError) return 'rate_limit';
+  if (err?.statusCode >= 500)            return 'server_error';
+  if (err?.statusCode === 404)           return 'not_found';
+  if (err?.message?.toLowerCase().includes('network') ||
+      err?.message?.toLowerCase().includes('fetch'))  return 'network_error';
+  return 'unknown';
+}
+
+// ---------------------------------------------------------------------------
+// Helper: write a SyncLog entry (fire-and-forget, never throws)
+// ---------------------------------------------------------------------------
+async function writeSyncLog(data) {
+  try {
+    await SyncLog.create(data);
+  } catch (logErr) {
+    console.error('[sync-ebay] Failed to write SyncLog:', logErr.message);
+  }
+}
+
 export async function POST(request) {
+  const startTime = Date.now();
+
   try {
     // 1. Permission gate — same as the CSV upload route
     const { authorized, user, error: permError } = await checkPermission('orders', 'edit');
@@ -89,27 +120,68 @@ export async function POST(request) {
       );
     }
 
-    // 5. Get a valid access token (refreshes automatically if expired)
+    // 5. Get a valid access token (refreshes proactively if close to expiry)
     let accessToken;
     try {
       accessToken = await refreshAccessToken(account);
     } catch (tokenErr) {
+      const durationMs = Date.now() - startTime;
+
+      // Permanent auth failure — clear stale tokens so UI shows "Not Connected"
+      if (tokenErr instanceof EbayAuthError) {
+        await clearStaleTokens(account._id);
+        await writeSyncLog({
+          accountId: account._id,
+          adminId,
+          trigger:      'manual',
+          status:       'error',
+          errorType:    'auth_error',
+          errorMessage: tokenErr.message.slice(0, 1000),
+          durationMs,
+        });
+        return NextResponse.json(
+          {
+            error:          `eBay token refresh failed (authorisation revoked): ${tokenErr.message}`,
+            needsReconnect: true,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Transient failure
+      await writeSyncLog({
+        accountId: account._id,
+        adminId,
+        trigger:      'manual',
+        status:       'error',
+        errorType:    classifyError(tokenErr),
+        errorMessage: tokenErr.message.slice(0, 1000),
+        durationMs,
+      });
       return NextResponse.json(
         { error: `eBay token refresh failed: ${tokenErr.message}` },
         { status: 502 }
       );
     }
 
-    // 6. Build the date filter: fetch orders modified in the last `daysBack` days
-    const sinceDate = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000);
-    const sinceDateISO = sinceDate.toISOString().replace(/\.\d{3}Z$/, 'Z');
-    // eBay Fulfillment API filter format: lastmodifieddate:[ISO_DATE...]
-    const dateFilter = `lastmodifieddate:[${sinceDateISO}...]`;
+    // 6. Build the date filter
+    // eBay Fulfillment API requires BOTH a start AND end date with full ISO 8601
+    // milliseconds (.sssZ) and two-dot range separator:
+    //   lastmodifieddate:[2026-06-23T12:24:27.000Z..2026-07-23T12:24:27.000Z]
+    // errorId 30010 ("Invalid date format") is thrown when:
+    //   - milliseconds are missing (e.g. 2026-06-23T12:24:27Z)
+    //   - three dots are used instead of two (e.g. [date...])
+    //   - open-ended range is used instead of explicit start..end
+    const nowDate      = new Date();
+    const sinceDate    = new Date(nowDate.getTime() - daysBack * 24 * 60 * 60 * 1000);
+    const sinceDateISO = sinceDate.toISOString(); // e.g. 2026-06-23T12:24:27.000Z
+    const nowDateISO   = nowDate.toISOString();   // e.g. 2026-07-23T12:24:27.000Z
+    const dateFilter   = `lastmodifieddate:[${sinceDateISO}..${nowDateISO}]`;
 
     // 7. Fetch all orders (paginate until exhausted)
     let allOrders = [];
-    let offset = 0;
-    const pageSize = 50; // eBay max per page is 200; 50 is a safe starting point
+    let offset    = 0;
+    const pageSize = 50;
 
     try {
       while (true) {
@@ -120,13 +192,21 @@ export async function POST(request) {
         });
 
         if (!page || page.length === 0) break;
-
         allOrders = allOrders.concat(page);
-
-        if (page.length < pageSize) break;  // last page
+        if (page.length < pageSize) break;
         offset += pageSize;
       }
     } catch (ordersErr) {
+      const durationMs = Date.now() - startTime;
+      await writeSyncLog({
+        accountId: account._id,
+        adminId,
+        trigger:      'manual',
+        status:       'error',
+        errorType:    classifyError(ordersErr),
+        errorMessage: ordersErr.message.slice(0, 1000),
+        durationMs,
+      });
       return NextResponse.json(
         { error: `Failed to fetch orders from eBay: ${ordersErr.message}` },
         { status: 502 }
@@ -134,6 +214,19 @@ export async function POST(request) {
     }
 
     if (allOrders.length === 0) {
+      const durationMs = Date.now() - startTime;
+      await writeSyncLog({
+        accountId: account._id,
+        adminId,
+        trigger:   'manual',
+        status:    'success',
+        imported:  0,
+        updated:   0,
+        skipped:   0,
+        orderErrors: 0,
+        durationMs,
+        ebayCallsThisRun: getApiCallStats().callsToday,
+      });
       return NextResponse.json(
         {
           message:  `No eBay orders found in the last ${daysBack} days.`,
@@ -162,13 +255,11 @@ export async function POST(request) {
         }
 
         // Fetch financial transactions for this order from the Finances API.
-        // Uses getTransactions (not getOrderEarningsById) — not geo-restricted.
         let transactions = [];
         try {
           transactions = await getTransactions(accessToken, orderId);
         } catch (txnErr) {
-          // Log but don't abort the whole sync — continue with zero fees for this order
-          console.warn(`getTransactions failed for orderId=${orderId}:`, txnErr.message);
+          console.warn(`sync-ebay: getTransactions failed for orderId=${orderId}:`, txnErr.message);
         }
 
         // Build the EbayOrder-compatible document
@@ -180,28 +271,20 @@ export async function POST(request) {
           user._id
         );
 
-        // Attempt SKU→Product link (same fallback logic as CSV upload route)
+        // Attempt SKU→Product link
         if (orderData.sku && orderData.sku !== '--') {
           try {
             const product = await Product.findOne({ sku: orderData.sku, adminId });
             if (product) {
               orderData.productId = product._id;
-              // Only auto-fill sourcingCost if seller hasn't already set one on a prior sync
-              // (handled below in the conditional $set)
             }
           } catch {
-            // Non-fatal — continue without product link
+            // Non-fatal
           }
         }
 
         // Upsert by (adminId, accountId, orderNumber, transactionType).
-        // This makes the sync fully idempotent:
-        //   - First run: creates the document (upsert)
-        //   - Subsequent runs: updates eBay-controlled financial fields only
-        //
-        // Fields that are NEVER overwritten on update:
-        //   sourcingCost, shippingCost
-        //   (sellers enter these manually; syncing from eBay should not wipe them)
+        // Idempotent — guaranteed by compound unique index on EbayOrder.
         const filter = {
           adminId,
           accountId:       account._id,
@@ -209,7 +292,6 @@ export async function POST(request) {
           transactionType: orderData.transactionType,
         };
 
-        // Build the $set payload — always update eBay financial fields
         const $setAlways = {
           grossAmount:   orderData.grossAmount,
           fees:          orderData.fees,
@@ -229,7 +311,6 @@ export async function POST(request) {
           $setAlways.productId = orderData.productId;
         }
 
-        // Fields only set on insert (i.e. when the document does not yet exist)
         const $setOnInsert = {
           adminId,
           accountId:       account._id,
@@ -238,8 +319,8 @@ export async function POST(request) {
           orderNumber:     orderData.orderNumber,
           transactionType: orderData.transactionType,
           description:     orderData.description,
-          sourcingCost:    orderData.sourcingCost,   // 0 for new orders
-          shippingCost:    orderData.shippingCost,   // 0 for new orders
+          sourcingCost:    orderData.sourcingCost,
+          shippingCost:    orderData.shippingCost,
           createdAt:       new Date(),
         };
 
@@ -256,13 +337,10 @@ export async function POST(request) {
           }
         );
 
-        // Determine whether this was an insert or an update
-        // Mongoose doesn't directly expose "was upserted" from findOneAndUpdate,
-        // so we compare createdAt vs updatedAt as a proxy.
         const wasInserted =
           result.createdAt &&
           result.updatedAt &&
-          Math.abs(result.createdAt - result.updatedAt) < 2000; // within 2 seconds = new
+          Math.abs(result.createdAt - result.updatedAt) < 2000;
 
         if (wasInserted) {
           imported++;
@@ -280,6 +358,30 @@ export async function POST(request) {
     }
 
     const totalErrors = errorDetails.length;
+    const durationMs  = Date.now() - startTime;
+
+    // Log API call stats — warn if approaching daily limit
+    const apiStats = getApiCallStats();
+    if (apiStats.approaching) {
+      console.warn(
+        `[sync-ebay] API call warning: ${apiStats.callsToday}/${apiStats.limit} ` +
+        'calls used today. Approaching eBay daily limit.'
+      );
+    }
+
+    // Write SyncLog
+    await writeSyncLog({
+      accountId: account._id,
+      adminId,
+      trigger:   'manual',
+      status:    totalErrors > 0 && imported + updated === 0 ? 'error' : 'success',
+      imported,
+      updated,
+      skipped,
+      orderErrors: totalErrors,
+      durationMs,
+      ebayCallsThisRun: apiStats.callsToday,
+    });
 
     return NextResponse.json(
       {

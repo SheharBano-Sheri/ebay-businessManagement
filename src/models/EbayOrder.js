@@ -14,7 +14,7 @@ const EbayOrderSchema = new mongoose.Schema({
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: false   // null for cron-sourced syncs (no logged-in user)
   },
   orderNumber: {
     type: String,
@@ -121,4 +121,14 @@ EbayOrderSchema.pre(['findOneAndUpdate', 'updateOne', 'updateMany'], function() 
   }
 });
 
-export default mongoose.models.EbayOrder || mongoose.model('EbayOrder', EbayOrderSchema);
+// Compound unique index matching the upsert filter used in sync-ebay and the
+// cron route. Enforces idempotency at the database level — same pattern as
+// Product's { adminId, sku } index (see CSV_DUPLICATE_PREVENTION.md).
+// If application logic somehow calls upsert twice for the same order, MongoDB
+// will reject the second insert rather than creating a duplicate.
+EbayOrderSchema.index(
+  { adminId: 1, accountId: 1, orderNumber: 1, transactionType: 1 },
+  { unique: true }
+);
+
+export default mongoose.models.EbayOrder || mongoose.model('EbayOrder', EbayOrderSchema);

@@ -36,7 +36,28 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Edit, Trash2, CreditCard, Link2, Unlink, RefreshCw, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Plus, Edit, Trash2, CreditCard, Link2, Unlink, RefreshCw, CheckCircle2, XCircle, Loader2, AlertTriangle } from "lucide-react";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns a human-readable relative label for an ebayLastSyncedAt timestamp.
+ * e.g. "just now", "5 minutes ago", "3 hours ago", "2 days ago".
+ * Returns "Never" when the value is null/undefined.
+ */
+function formatLastSynced(date) {
+  if (!date) return 'Never';
+  const diffMs      = Date.now() - new Date(date).getTime();
+  const diffMinutes = Math.floor(diffMs / 60_000);
+  const diffHours   = Math.floor(diffMs / 3_600_000);
+  const diffDays    = Math.floor(diffMs / 86_400_000);
+  if (diffMinutes < 1)   return 'just now';
+  if (diffMinutes < 60)  return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+  if (diffHours   < 24)  return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+  return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+}
 
 function AccountsContent() {
   const { data: session, status } = useSession();
@@ -499,41 +520,85 @@ function AccountsContent() {
                           </TableCell>
                           <TableCell className="border-r">
                             {account.ebayRefreshToken ? (
-                              <div className="flex items-center gap-2">
-                                <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1 text-xs">
-                                  <CheckCircle2 className="h-3 w-3" />
-                                  Connected
-                                </Badge>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8 gap-1 text-xs"
-                                  disabled={syncingAccountId === account._id}
-                                  onClick={() => handleSyncNow(account._id)}
-                                >
-                                  {syncingAccountId === account._id ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : (
-                                    <RefreshCw className="h-3 w-3" />
-                                  )}
-                                  Sync Now
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 text-xs text-destructive hover:bg-destructive/10"
-                                  disabled={disconnectingAccountId === account._id}
-                                  onClick={() => handleDisconnect(account._id)}
-                                >
-                                  {disconnectingAccountId === account._id ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : (
-                                    <Unlink className="h-3 w-3" />
-                                  )}
-                                  Disconnect
-                                </Button>
-                              </div>
+                              account.needsReconnect ? (
+                                /* ── Reconnect Required state ── */
+                                <div className="flex flex-col gap-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 gap-1 text-xs">
+                                      <AlertTriangle className="h-3 w-3" />
+                                      Reconnect Required
+                                    </Badge>
+                                    <Button
+                                      size="sm"
+                                      className="h-8 gap-1 text-xs bg-amber-600 hover:bg-amber-700 text-white"
+                                      onClick={() => handleConnect(account._id)}
+                                    >
+                                      <Link2 className="h-3 w-3" />
+                                      Reconnect
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 text-xs text-destructive hover:bg-destructive/10"
+                                      disabled={disconnectingAccountId === account._id}
+                                      onClick={() => handleDisconnect(account._id)}
+                                    >
+                                      {disconnectingAccountId === account._id ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <Unlink className="h-3 w-3" />
+                                      )}
+                                      Disconnect
+                                    </Button>
+                                  </div>
+                                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                                    eBay token expired — re-authorise to resume auto-sync.
+                                  </p>
+                                </div>
+                              ) : (
+                                /* ── Connected state ── */
+                                <div className="flex flex-col gap-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1 text-xs">
+                                      <CheckCircle2 className="h-3 w-3" />
+                                      Connected
+                                    </Badge>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 gap-1 text-xs"
+                                      disabled={syncingAccountId === account._id}
+                                      onClick={() => handleSyncNow(account._id)}
+                                    >
+                                      {syncingAccountId === account._id ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <RefreshCw className="h-3 w-3" />
+                                      )}
+                                      Sync Now
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 text-xs text-destructive hover:bg-destructive/10"
+                                      disabled={disconnectingAccountId === account._id}
+                                      onClick={() => handleDisconnect(account._id)}
+                                    >
+                                      {disconnectingAccountId === account._id ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <Unlink className="h-3 w-3" />
+                                      )}
+                                      Disconnect
+                                    </Button>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    Last synced: {formatLastSynced(account.ebayLastSyncedAt)}
+                                  </p>
+                                </div>
+                              )
                             ) : (
+                              /* ── Not Connected state ── */
                               <div className="flex items-center gap-2">
                                 <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 gap-1 text-xs">
                                   <XCircle className="h-3 w-3" />

@@ -39,6 +39,20 @@ const AccountSchema = new mongoose.Schema({
     type: Date,
     default: null   // when the seller first completed the OAuth consent flow
   },
+  // Set to true by the cron job when a token refresh fails with a non-retryable
+  // OAuth error (e.g. invalid_grant, invalid_client). Cleared back to false when
+  // the seller successfully reconnects via /api/ebay/callback.
+  needsReconnect: {
+    type: Boolean,
+    default: false
+  },
+  // Timestamp of the most recent successful cron-driven sync.
+  // Used by the cron job to skip accounts synced very recently (< 5.5 h ago),
+  // and displayed in the UI as "Last synced: N hours ago".
+  ebayLastSyncedAt: {
+    type: Date,
+    default: null
+  },
   isActive: {
     type: Boolean,
     default: true

@@ -18,28 +18,28 @@ const FEATURES = [
     number: 1,
     title: "Manage Inventory",
     description: "Real-time inventory tracking across all channels and warehouses. Keep stock levels synchronized automatically.",
-    image: "/hero/image3.png",
+    image: "/hero/dashboard-main.png",
   },
   {
     id: "tab-2",
     number: 2,
     title: "Track Orders & Shipping",
     description: "Unified order management from multiple stores. Automate shipping labels and track deliveries in real-time.",
-    image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&h=600&fit=crop",
+    image: "/hero/orders-dashboard.png",
   },
   {
     id: "tab-3",
     number: 3,
     title: "Seller Analytics & Insights",
     description: "Monitor sales performance, customer feedback, and market trends. Generate detailed reports for data-driven decisions.",
-    image: "https://images.unsplash.com/photo-1552664730-d307ca884978?w=800&h=600&fit=crop",
+    image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=800&fit=crop&q=90",
   },
   {
     id: "tab-4",
     number: 4,
     title: "Business Growth Tools",
     description: "Optimize pricing strategies, manage listings efficiently, and scale your business with advanced automation.",
-    image: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800&h=600&fit=crop",
+    image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&h=800&fit=crop&q=90",
   },
 ];
 
@@ -175,13 +175,12 @@ export default function Home() {
                         <p className="text-sm">{feature.description}</p>
                       </div>
                     </div>
-                    <div className="mt-6 block border px-6 lg:hidden">
-                      <div className="aspect-video relative overflow-hidden rounded-md">
-                        <Image
+                    <div className="mt-6 block border px-2 py-2 lg:hidden">
+                      <div className="relative rounded-md w-full">
+                        <img
                           src={feature.image}
                           alt={feature.title}
-                          fill
-                          className="h-full w-full object-cover"
+                          className="w-full h-auto rounded-md object-contain"
                         />
                       </div>
                     </div>
@@ -197,14 +196,13 @@ export default function Home() {
                     aria-labelledby={`${feature.id}-trigger`}
                     id={`${feature.id}-content`}
                     tabIndex="0"
-                    className="aspect-video relative overflow-hidden rounded-xl"
+                    className="w-full rounded-xl overflow-hidden"
                     hidden={activeTab !== feature.id}
                   >
-                    <Image
+                    <img
                       alt={feature.title}
-                      className="h-full w-full object-cover rounded-lg border shadow"
+                      className="w-full h-auto rounded-lg shadow block"
                       src={feature.image}
-                      fill
                     />
                   </div>
                 ))}
