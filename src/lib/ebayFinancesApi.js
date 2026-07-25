@@ -349,15 +349,24 @@ export async function exchangeCodeForTokens(authCode) {
 export async function getOrders(accessToken, opts = {}) {
   const { limit = 50, filter, offset = 0 } = opts;
 
-  // IMPORTANT: URLSearchParams would percent-encode brackets and colons in the
-  // filter value (e.g. "[" → "%5B", ":" → "%3A") which breaks eBay's filter
-  // parser and causes errorId 30010 "Invalid date format".
-  // Instead, build limit/offset via URLSearchParams and append the filter raw.
+  // Build base params (limit, offset) via URLSearchParams.
   const baseParams = new URLSearchParams({ limit, offset });
   let url = `${EBAY_FULFILLMENT_URL}?${baseParams.toString()}`;
+
   if (filter) {
-    // Append filter un-encoded so eBay sees: filter=lastmodifieddate:[start..end]
-    url += `&filter=${filter}`;
+    // IMPORTANT: The filter value contains characters that Node's WHATWG URL
+    // parser mangles when they appear raw in a query string:
+    //   [  ]  :  ..
+    // Specifically, literal [ and ] outside the host component are stripped or
+    // cause the URL to be rejected, which truncates the end date and produces
+    // eBay errorId 30810 "Invalid date format" (the error shows "...]" because
+    // the closing bracket disappears from the value before the request is sent).
+    //
+    // Fix: percent-encode the filter VALUE only (not the key).
+    // eBay's API server percent-decodes query parameters before parsing, so it
+    // sees the fully intact string:
+    //   lastmodifieddate:[2026-06-23T12:24:27.000Z..2026-07-23T12:24:27.000Z]
+    url += `&filter=${encodeURIComponent(filter)}`;
   }
 
   let response;

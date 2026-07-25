@@ -46,6 +46,19 @@ const AccountSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Per-attempt OAuth CSRF nonce.
+  // Written by /api/ebay/connect when the seller is redirected to eBay.
+  // Verified and cleared (single-use) by /api/ebay/callback on return.
+  // Prevents state-fixation attacks and silent eBay session re-use from
+  // attributing tokens to the wrong GenieBMS account.
+  oauthStateNonce: {
+    type: String,
+    default: null
+  },
+  oauthStateNonceExpiresAt: {
+    type: Date,
+    default: null   // set to Date.now + 15 min by /api/ebay/connect
+  },
   // Timestamp of the most recent successful cron-driven sync.
   // Used by the cron job to skip accounts synced very recently (< 5.5 h ago),
   // and displayed in the UI as "Last synced: N hours ago".

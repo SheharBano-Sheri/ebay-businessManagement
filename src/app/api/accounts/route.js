@@ -56,6 +56,16 @@ export async function POST(request) {
     const body = await request.json();
     console.log('Creating account with data:', body, 'for adminId:', adminId);
 
+    // Whitelist only the fields that a user is allowed to set.
+    // OAuth token fields (ebayRefreshToken, ebayAccessToken, ebayConnectedAt, etc.)
+    // are NEVER accepted here — they are written exclusively by /api/ebay/callback
+    // and /api/ebay/disconnect to prevent mass-assignment bypassing the OAuth flow.
+    const { accountName, ebayUsername, defaultCurrency, apiKey } = body;
+
+    if (!accountName) {
+      return NextResponse.json({ error: 'accountName is required' }, { status: 400 });
+    }
+
     // Check plan limits
     const existingAccounts = await Account.countDocuments({ adminId });
     
@@ -77,7 +87,10 @@ export async function POST(request) {
     // Premium plan has no limits
 
     const account = new Account({
-      ...body,
+      accountName,
+      ebayUsername,
+      defaultCurrency,
+      apiKey,
       adminId,
       updatedAt: new Date()
     });
@@ -109,15 +122,25 @@ export async function PUT(request) {
 
     const adminId = user.adminId || user._id;
     const body = await request.json();
-    const { _id, ...updateData } = body;
 
-    if (!_id) {
+    if (!body._id) {
       return NextResponse.json({ error: 'Account ID is required' }, { status: 400 });
     }
 
+    // Whitelist only safe, user-editable fields.
+    // OAuth token fields are never writable here — they are managed exclusively
+    // by /api/ebay/callback and /api/ebay/disconnect.
+    const { _id, accountName, ebayUsername, defaultCurrency, apiKey } = body;
+    const safeUpdateData = { accountName, ebayUsername, defaultCurrency, apiKey };
+
+    // Strip undefined values so partial updates don't accidentally clear fields
+    Object.keys(safeUpdateData).forEach(
+      (k) => safeUpdateData[k] === undefined && delete safeUpdateData[k]
+    );
+
     const account = await Account.findOneAndUpdate(
       { _id, adminId },
-      { ...updateData, updatedAt: new Date() },
+      { ...safeUpdateData, updatedAt: new Date() },
       { new: true }
     );
 

@@ -4,34 +4,37 @@
 //
 // Called by eBay after the seller grants (or declines) consent on eBay's
 // authorization page. eBay redirects here with:
-//   ?code=<authorizationCode>&state=<accountId>     (consent granted)
-//   ?error=access_denied&state=<accountId>           (consent declined)
+//   ?code=<authorizationCode>&state=<accountId>.<nonce>   (consent granted)
+//   ?error=access_denied&state=<accountId>.<nonce>         (consent declined)
 //
 // On success, this route:
-//   1. Exchanges the authorization code for access + refresh tokens
-//   2. Stores the refresh token (and initial access token) on the Account document
-//   3. Redirects the seller's browser to the dashboard with a success notice
+//   1. Parses accountId and nonce from the `state` parameter
+//   2. Loads the Account and verifies the nonce matches the stored value
+//      and has not expired — rejects any callback that fails this check
+//   3. Exchanges the authorization code for access + refresh tokens
+//   4. Stores the refresh token (and initial access token) on the Account
+//   5. Clears the nonce fields (single-use) to prevent replay
+//   6. Redirects the seller's browser to the dashboard with a success notice
 //
 // On failure / denial:
-//   Redirects to /login (the Auth declined URL configured in the eBay developer portal)
-//   with an error query param so the UI can surface a friendly message.
+//   Redirects to /dashboard/accounts with an error query param.
 //
 // Registered callback URLs in the eBay developer portal RuName:
 //   Auth accepted URL: https://www.geniebms.com/api/ebay/callback
 //   Auth declined URL: https://www.geniebms.com/login
 
-import { NextResponse }   from 'next/server';
+import { NextResponse }     from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions }    from '../../auth/[...nextauth]/route';
-import connectDB          from '@/lib/mongodb';
-import User               from '@/models/User';
-import Account            from '@/models/Account';
+import { authOptions }      from '../../auth/[...nextauth]/route';
+import connectDB            from '@/lib/mongodb';
+import User                 from '@/models/User';
+import Account              from '@/models/Account';
 import { exchangeCodeForTokens } from '@/lib/ebayFinancesApi';
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const code       = searchParams.get('code');
-  const state      = searchParams.get('state');   // accountId, set in /api/ebay/connect
+  const stateRaw   = searchParams.get('state');   // "<accountId>.<nonce>", set in /api/ebay/connect
   const oauthError = searchParams.get('error');   // present when seller declined consent
 
   // --- Seller declined consent ---
@@ -44,10 +47,30 @@ export async function GET(request) {
   }
 
   // --- Missing required params ---
-  if (!code || !state) {
+  if (!code || !stateRaw) {
     return NextResponse.json(
       { error: 'Missing authorization code or state parameter from eBay callback.' },
       { status: 400 }
+    );
+  }
+
+  // --- Parse state: "<accountId>.<nonce>" ---
+  // The nonce itself is a 64-char hex string (32 bytes); accountId is a 24-char
+  // MongoDB ObjectId. We split on the FIRST dot only so neither can contain a
+  // dot that would confuse parsing (ObjectIds never contain dots).
+  const dotIndex  = stateRaw.indexOf('.');
+  if (dotIndex === -1) {
+    console.error('eBay callback: state parameter missing dot separator — possible old or tampered state:', stateRaw);
+    return NextResponse.redirect(
+      new URL('/dashboard/accounts?ebay_error=invalid_state', request.url)
+    );
+  }
+  const accountId    = stateRaw.slice(0, dotIndex);
+  const receivedNonce = stateRaw.slice(dotIndex + 1);
+
+  if (!accountId || !receivedNonce) {
+    return NextResponse.redirect(
+      new URL('/dashboard/accounts?ebay_error=invalid_state', request.url)
     );
   }
 
@@ -72,15 +95,57 @@ export async function GET(request) {
 
     const adminId = user.adminId || user._id;
 
-    // 3. The state parameter carries the accountId (set in /api/ebay/connect)
-    const accountId = state;
-
-    // 4. Verify the account exists and belongs to this admin
+    // 3. Load the Account and verify ownership
     const account = await Account.findOne({ _id: accountId, adminId });
     if (!account) {
-      return NextResponse.json(
-        { error: 'Account not found or does not belong to your organisation.' },
-        { status: 404 }
+      console.error(`eBay callback: account ${accountId} not found for adminId ${adminId}`);
+      return NextResponse.redirect(
+        new URL('/dashboard/accounts?ebay_error=account_not_found', request.url)
+      );
+    }
+
+    // 4. Nonce verification — the core CSRF / state-fixation guard.
+    //
+    //    Rules:
+    //    a) The Account MUST have a stored nonce (one was set by /api/ebay/connect).
+    //    b) The stored nonce MUST match what eBay echoed back in `state`.
+    //    c) The nonce MUST not have expired (15-minute window).
+    //
+    //    Any failure here means this callback was not produced by the most recent
+    //    legitimate connect attempt for this account, and we refuse to write tokens.
+
+    if (!account.oauthStateNonce || !account.oauthStateNonceExpiresAt) {
+      console.error(
+        `eBay callback REJECTED — no pending nonce on account ${accountId}. ` +
+        'Possible replay of an already-consumed callback or connect was never initiated.'
+      );
+      return NextResponse.redirect(
+        new URL('/dashboard/accounts?ebay_error=no_pending_oauth', request.url)
+      );
+    }
+
+    if (account.oauthStateNonce !== receivedNonce) {
+      console.error(
+        `eBay callback REJECTED — nonce mismatch for account ${accountId}. ` +
+        'Possible CSRF or state-fixation attempt.'
+      );
+      return NextResponse.redirect(
+        new URL('/dashboard/accounts?ebay_error=state_mismatch', request.url)
+      );
+    }
+
+    if (Date.now() > account.oauthStateNonceExpiresAt.getTime()) {
+      console.error(
+        `eBay callback REJECTED — nonce expired for account ${accountId}. ` +
+        `Expired at ${account.oauthStateNonceExpiresAt.toISOString()}.`
+      );
+      // Clear the stale nonce so the seller gets a clean "Connect" button again
+      await Account.findByIdAndUpdate(accountId, {
+        oauthStateNonce:          null,
+        oauthStateNonceExpiresAt: null,
+      });
+      return NextResponse.redirect(
+        new URL('/dashboard/accounts?ebay_error=oauth_expired', request.url)
       );
     }
 
@@ -90,19 +155,24 @@ export async function GET(request) {
     const accessTokenExpiry = new Date(Date.now() + expiresIn * 1000);
 
     // 6. Persist the tokens on the Account document.
+    //    Also clear the single-use nonce fields — this prevents any replay of
+    //    the same callback URL from writing tokens a second time.
     //    NOTE: refresh tokens are stored as plain strings.
     //    TODO: Encrypt ebayRefreshToken at rest once integration is proven in production.
     await Account.findByIdAndUpdate(accountId, {
-      ebayRefreshToken:      refreshToken,
-      ebayAccessToken:       accessToken,
-      ebayAccessTokenExpiry: accessTokenExpiry,
-      ebayConnectedAt:       new Date(),
-      needsReconnect:        false,   // clear any prior reconnect warning
-      updatedAt:             new Date(),
+      ebayRefreshToken:         refreshToken,
+      ebayAccessToken:          accessToken,
+      ebayAccessTokenExpiry:    accessTokenExpiry,
+      ebayConnectedAt:          new Date(),
+      needsReconnect:           false,   // clear any prior reconnect warning
+      // Consume the nonce — single-use, no replay possible after this point
+      oauthStateNonce:          null,
+      oauthStateNonceExpiresAt: null,
+      updatedAt:                new Date(),
     });
 
     console.log(
-      `eBay OAuth connected successfully for accountId=${accountId}, adminId=${adminId}`
+      `eBay OAuth connected successfully for accountId=${accountId}, adminId=${adminId}. Nonce consumed.`
     );
 
     // 7. Redirect the seller to the dashboard with a success indicator.

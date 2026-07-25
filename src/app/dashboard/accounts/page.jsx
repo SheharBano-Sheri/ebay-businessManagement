@@ -91,11 +91,31 @@ function AccountsContent() {
   }, [status]);
 
   useEffect(() => {
-    if (searchParams?.get("ebay_connected") === "1") {
+    const ebayConnected = searchParams?.get("ebay_connected");
+    const ebayError     = searchParams?.get("ebay_error");
+
+    if (ebayConnected === "1") {
       toast.success("eBay Account connected successfully!");
+    }
+
+    if (ebayError) {
+      const errorMessages = {
+        invalid_state:     "eBay connection failed: the security token was invalid or tampered with. Please try connecting again.",
+        no_pending_oauth:  "eBay connection failed: no active connection request was found. Please click 'Connect eBay' again.",
+        state_mismatch:    "eBay connection failed: security verification failed (state mismatch). Please try connecting again.",
+        oauth_expired:     "eBay connection timed out — the authorisation window exceeded 15 minutes. Please click 'Connect eBay' again.",
+        account_not_found: "eBay connection failed: the account was not found. Please try again.",
+        access_denied:     "eBay connection was cancelled or denied.",
+        session_expired:   "Your session expired during the eBay connection. Please log in again and retry.",
+      };
+      toast.error(errorMessages[ebayError] || `eBay connection failed (${ebayError}). Please try again.`);
+    }
+
+    if (ebayConnected || ebayError) {
       const url = new URL(window.location.href);
       url.searchParams.delete("ebay_connected");
-      window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+      url.searchParams.delete("ebay_error");
+      window.history.replaceState({}, "", url.pathname + (url.search || ""));
     }
   }, [searchParams]);
 

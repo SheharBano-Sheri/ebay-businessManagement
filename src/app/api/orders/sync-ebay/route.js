@@ -166,17 +166,20 @@ export async function POST(request) {
 
     // 6. Build the date filter
     // eBay Fulfillment API requires BOTH a start AND end date with full ISO 8601
-    // milliseconds (.sssZ) and two-dot range separator:
+    // milliseconds (.sssZ) and the two-dot range separator:
     //   lastmodifieddate:[2026-06-23T12:24:27.000Z..2026-07-23T12:24:27.000Z]
-    // errorId 30010 ("Invalid date format") is thrown when:
+    // errorId 30810 ("Invalid date format") is thrown when:
     //   - milliseconds are missing (e.g. 2026-06-23T12:24:27Z)
-    //   - three dots are used instead of two (e.g. [date...])
+    //   - brackets [ ] are sent un-encoded and mangled by Node's URL parser
     //   - open-ended range is used instead of explicit start..end
+    // The filter value is percent-encoded in getOrders() via encodeURIComponent
+    // so that brackets survive Node's WHATWG URL parser intact.
     const nowDate      = new Date();
     const sinceDate    = new Date(nowDate.getTime() - daysBack * 24 * 60 * 60 * 1000);
-    const sinceDateISO = sinceDate.toISOString(); // e.g. 2026-06-23T12:24:27.000Z
-    const nowDateISO   = nowDate.toISOString();   // e.g. 2026-07-23T12:24:27.000Z
+    const sinceDateISO = sinceDate.toISOString(); // always includes .sssZ milliseconds
+    const nowDateISO   = nowDate.toISOString();
     const dateFilter   = `lastmodifieddate:[${sinceDateISO}..${nowDateISO}]`;
+    console.log('[sync-ebay] eBay date filter (before encoding):', dateFilter);
 
     // 7. Fetch all orders (paginate until exhausted)
     let allOrders = [];
