@@ -110,6 +110,13 @@ export async function GET(request) {
 
     // 6. Build the eBay authorization URL.
     //    state = "<accountId>.<nonce>" — the callback parses both halves.
+    //
+    //    prompt=login forces eBay to ALWAYS show the login screen, even when
+    //    the seller's browser already has an active eBay session.
+    //    Without this, eBay silently reuses the current browser session —
+    //    making it impossible to connect a DIFFERENT eBay seller account
+    //    (e.g. "sheri" while "Umair" is already logged in). Every Connect
+    //    click must ask "which eBay account do you want to link?" explicitly.
     const state  = `${accountId}.${nonce}`;
     const params = new URLSearchParams({
       client_id:     appId,
@@ -117,6 +124,7 @@ export async function GET(request) {
       response_type: 'code',
       scope:         EBAY_SCOPES,
       state,                        // round-tripped back to /api/ebay/callback
+      prompt:        'login',       // always show eBay login — never silently reuse browser session
     });
 
     const authUrl = `${EBAY_AUTH_URL}?${params.toString()}`;
