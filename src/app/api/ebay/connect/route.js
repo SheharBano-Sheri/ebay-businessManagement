@@ -124,7 +124,10 @@ export async function GET(request) {
       response_type: 'code',
       scope:         EBAY_SCOPES,
       state,                        // round-tripped back to /api/ebay/callback
-      prompt:        'login',       // always show eBay login — never silently reuse browser session
+      prompt:        'login consent', // force eBay login screen AND consent/agree screen every time
+                                     // 'login' alone forces credentials but eBay skips consent if
+                                     // this app was previously authorized. 'consent' forces the
+                                     // "Agree to grant access" screen to always appear explicitly.
     });
 
     const authUrl = `${EBAY_AUTH_URL}?${params.toString()}`;
