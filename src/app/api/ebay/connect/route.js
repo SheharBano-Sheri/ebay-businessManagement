@@ -124,10 +124,7 @@ export async function GET(request) {
       response_type: 'code',
       scope:         EBAY_SCOPES,
       state,                        // round-tripped back to /api/ebay/callback
-      prompt:        'login consent', // force eBay login screen AND consent/agree screen every time
-                                     // 'login' alone forces credentials but eBay skips consent if
-                                     // this app was previously authorized. 'consent' forces the
-                                     // "Agree to grant access" screen to always appear explicitly.
+      prompt:        'login',       // force eBay login screen every time (eBay only supports 'login')
     });
 
     const authUrl = `${EBAY_AUTH_URL}?${params.toString()}`;

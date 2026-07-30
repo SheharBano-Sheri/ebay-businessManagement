@@ -366,7 +366,8 @@ export async function getOrders(accessToken, opts = {}) {
     // eBay's API server percent-decodes query parameters before parsing, so it
     // sees the fully intact string:
     //   lastmodifieddate:[2026-06-23T12:24:27.000Z..2026-07-23T12:24:27.000Z]
-    url += `&filter=${encodeURIComponent(filter)}`;
+    // Use encodeURI so colons are preserved, but brackets are safely encoded.
+    url += `&filter=${encodeURI(filter)}`;
   }
 
   let response;
