@@ -93,7 +93,20 @@ export async function GET(request) {
       );
     }
 
-    // 5. Generate a per-attempt cryptographic nonce and persist it on the Account.
+    // 5. Clear any existing eBay tokens BEFORE starting a new OAuth flow.
+    //    This ensures:
+    //    a) The account shows "Not Connected" if the user cancels or closes the eBay window.
+    //    b) Stale/expired tokens from a previous connection cannot create a false "Connected" state.
+    //    New tokens will only be written by /api/ebay/callback after the user grants consent.
+    await Account.findByIdAndUpdate(accountId, {
+      ebayRefreshToken:      null,
+      ebayAccessToken:       null,
+      ebayAccessTokenExpiry: null,
+      ebayConnectedAt:       null,
+      needsReconnect:        false,
+    });
+
+    // 6. Generate a per-attempt cryptographic nonce and persist it on the Account.
     //    The callback route will verify this nonce before writing any tokens.
     //    The nonce is single-use: the callback clears it after a successful exchange.
     const nonce    = crypto.randomBytes(32).toString('hex');
@@ -105,10 +118,10 @@ export async function GET(request) {
     });
 
     console.log(
-      `eBay connect initiated for accountId=${accountId}, nonce stored, expires=${expiresAt.toISOString()}`
+      `eBay connect initiated for accountId=${accountId}, existing tokens cleared, nonce stored, expires=${expiresAt.toISOString()}`
     );
 
-    // 6. Build the eBay authorization URL.
+    // 7. Build the eBay authorization URL.
     //    state = "<accountId>.<nonce>" — the callback parses both halves.
     //
     //    prompt=login forces eBay to ALWAYS show the login screen, even when
@@ -129,7 +142,7 @@ export async function GET(request) {
 
     const authUrl = `${EBAY_AUTH_URL}?${params.toString()}`;
 
-    // 7. Redirect the seller's browser to eBay's consent screen
+    // 8. Redirect the seller's browser to eBay's consent screen
     return NextResponse.redirect(authUrl);
 
   } catch (error) {

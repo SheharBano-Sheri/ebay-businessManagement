@@ -36,7 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Edit, Trash2, CreditCard, Link2, Unlink, RefreshCw, CheckCircle2, XCircle, Loader2, AlertTriangle } from "lucide-react";
+import { Plus, Edit, Trash2, CreditCard, Link2, Unlink, RefreshCw, CheckCircle2, XCircle, Loader2, AlertTriangle, ExternalLink, ShieldCheck } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -70,6 +70,9 @@ function AccountsContent() {
   const [editingAccount, setEditingAccount] = useState(null);
   const [syncingAccountId, setSyncingAccountId] = useState(null);
   const [disconnectingAccountId, setDisconnectingAccountId] = useState(null);
+  const [connectingAccountId, setConnectingAccountId] = useState(null);
+  // eBay connect confirmation dialog
+  const [connectConfirmAccount, setConnectConfirmAccount] = useState(null); // account object to connect
 
   const [formData, setFormData] = useState({
     accountName: "",
@@ -247,8 +250,21 @@ function AccountsContent() {
     }
   };
 
+  // Show confirmation dialog first — actual redirect happens in confirmConnect
   const handleConnect = (accountId) => {
-    window.location.href = `/api/ebay/connect?accountId=${accountId}`;
+    const account = accounts.find((a) => a._id === accountId);
+    setConnectConfirmAccount(account || { _id: accountId });
+  };
+
+  // Called when user clicks "Continue to eBay Login" in the confirmation dialog
+  const confirmConnect = () => {
+    const accountId = connectConfirmAccount?._id;
+    if (!accountId) return;
+    setConnectingAccountId(accountId);
+    setConnectConfirmAccount(null);
+    setTimeout(() => {
+      window.location.href = `/api/ebay/connect?accountId=${accountId}`;
+    }, 100);
   };
 
   const handleDisconnect = async (accountId) => {
@@ -490,7 +506,64 @@ function AccountsContent() {
               </DialogContent>
             </Dialog>
 
+            {/* eBay Connect Confirmation Dialog */}
+            <Dialog
+              open={!!connectConfirmAccount}
+              onOpenChange={(open) => { if (!open) setConnectConfirmAccount(null); }}
+            >
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5 text-blue-600" />
+                    Connect to eBay
+                  </DialogTitle>
+                  <DialogDescription>
+                    You will be redirected to eBay to authorise access for{" "}
+                    <strong>{connectConfirmAccount?.accountName || "this account"}</strong>.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3 py-2">
+                  {/* Warning if already connected */}
+                  {connectConfirmAccount?.ebayRefreshToken && (
+                    <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                      <p className="text-amber-800 dark:text-amber-300">
+                        This account is currently connected. Proceeding will <strong>disconnect the existing eBay session</strong> and start a fresh login.
+                      </p>
+                    </div>
+                  )}
+                  {/* Steps */}
+                  <div className="rounded-lg border bg-muted/40 p-3 space-y-2 text-sm">
+                    <p className="font-medium text-foreground">What happens next:</p>
+                    <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                      <li>You will be taken to <strong>eBay's login page</strong></li>
+                      <li>Sign in with your <strong>eBay seller credentials</strong></li>
+                      <li>Grant GenieBMS access to your eBay data</li>
+                      <li>You will be redirected back here automatically</li>
+                    </ol>
+                  </div>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                    You will leave this site briefly to complete eBay login.
+                  </p>
+                </div>
+                <DialogFooter className="gap-2">
+                  <Button variant="outline" onClick={() => setConnectConfirmAccount(null)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                    onClick={confirmConnect}
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Continue to eBay Login
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
             {/* Accounts Table */}
+
             <Card className="border-2 shadow-lg">
               <div className="overflow-x-auto">
                 <Table>
@@ -551,10 +624,15 @@ function AccountsContent() {
                                     <Button
                                       size="sm"
                                       className="h-8 gap-1 text-xs bg-amber-600 hover:bg-amber-700 text-white"
+                                      disabled={connectingAccountId === account._id}
                                       onClick={() => handleConnect(account._id)}
                                     >
-                                      <Link2 className="h-3 w-3" />
-                                      Reconnect
+                                      {connectingAccountId === account._id ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <Link2 className="h-3 w-3" />
+                                      )}
+                                      {connectingAccountId === account._id ? "Connecting..." : "Reconnect"}
                                     </Button>
                                     <Button
                                       variant="ghost"
@@ -627,10 +705,15 @@ function AccountsContent() {
                                 <Button
                                   size="sm"
                                   className="h-8 gap-1 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                                  disabled={connectingAccountId === account._id}
                                   onClick={() => handleConnect(account._id)}
                                 >
-                                  <Link2 className="h-3 w-3" />
-                                  Connect eBay
+                                  {connectingAccountId === account._id ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Link2 className="h-3 w-3" />
+                                  )}
+                                  {connectingAccountId === account._id ? "Connecting..." : "Connect eBay"}
                                 </Button>
                               </div>
                             )}

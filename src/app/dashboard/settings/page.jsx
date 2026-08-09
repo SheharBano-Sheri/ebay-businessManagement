@@ -31,6 +31,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+import {
   User,
   Mail,
   CreditCard,
@@ -49,6 +58,8 @@ import {
   Activity,
   Clock,
   TrendingUp,
+  ExternalLink,
+  ShieldCheck,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -102,6 +113,7 @@ function SettingsContent() {
   const [syncingEbay, setSyncingEbay] = useState(false);
   const [disconnectingEbay, setDisconnectingEbay] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
+  const [connectConfirmAccount, setConnectConfirmAccount] = useState(null);
 
   // eBay Sync Health state
   const [healthData, setHealthData] = useState([]);
@@ -155,12 +167,21 @@ function SettingsContent() {
 
   const selectedAccount = accounts.find((acc) => acc._id === selectedAccountId) || accounts[0];
 
+  // Show confirmation dialog — actual redirect happens in confirmConnectEbay
   const handleConnectEbay = (accId) => {
     const id = accId || selectedAccountId;
     if (!id) {
       toast.error("Please select or create an account first");
       return;
     }
+    const account = accounts.find((a) => a._id === id);
+    setConnectConfirmAccount(account || { _id: id });
+  };
+
+  const confirmConnectEbay = () => {
+    const id = connectConfirmAccount?._id;
+    if (!id) return;
+    setConnectConfirmAccount(null);
     window.location.href = `/api/ebay/connect?accountId=${id}`;
   };
 
@@ -447,7 +468,63 @@ function SettingsContent() {
 
               {/* eBay Integration Tab */}
               <TabsContent value="ebay" className="space-y-4">
+                {/* eBay Connect Confirmation Dialog */}
+                <Dialog
+                  open={!!connectConfirmAccount}
+                  onOpenChange={(open) => { if (!open) setConnectConfirmAccount(null); }}
+                >
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <ShieldCheck className="h-5 w-5 text-blue-600" />
+                        Connect to eBay
+                      </DialogTitle>
+                      <DialogDescription>
+                        You will be redirected to eBay to authorise access for{" "}
+                        <strong>{connectConfirmAccount?.accountName || "this account"}</strong>.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                      {connectConfirmAccount?.ebayRefreshToken && (
+                        <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+                          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                          <p className="text-amber-800 dark:text-amber-300">
+                            This account is currently connected. Proceeding will{" "}
+                            <strong>disconnect the existing eBay session</strong> and start a fresh login.
+                          </p>
+                        </div>
+                      )}
+                      <div className="rounded-lg border bg-muted/40 p-3 space-y-2 text-sm">
+                        <p className="font-medium text-foreground">What happens next:</p>
+                        <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                          <li>You will be taken to <strong>eBay's login page</strong></li>
+                          <li>Sign in with your <strong>eBay seller credentials</strong></li>
+                          <li>Grant GenieBMS access to your eBay data</li>
+                          <li>You will be redirected back here automatically</li>
+                        </ol>
+                      </div>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <ExternalLink className="h-3 w-3 shrink-0" />
+                        You will leave this site briefly to complete eBay login.
+                      </p>
+                    </div>
+                    <DialogFooter className="gap-2">
+                      <Button variant="outline" onClick={() => setConnectConfirmAccount(null)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                        onClick={confirmConnectEbay}
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        Continue to eBay Login
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
                 {/* Account selector */}
+
                 {accounts.length > 1 && (
                   <Card>
                     <CardHeader>
