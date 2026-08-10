@@ -18,28 +18,28 @@ const FEATURES = [
     number: 1,
     title: "Manage Inventory",
     description: "Real-time inventory tracking across all channels and warehouses. Keep stock levels synchronized automatically.",
-    image: "/hero/dashboard-main.png",
+    image: "/hero/dashboard-main.png?v=2",
   },
   {
     id: "tab-2",
     number: 2,
     title: "Track Orders & Shipping",
     description: "Unified order management from multiple stores. Automate shipping labels and track deliveries in real-time.",
-    image: "/hero/orders-dashboard.png",
+    image: "/hero/orders-dashboard.png?v=2",
   },
   {
     id: "tab-3",
     number: 3,
     title: "Seller Analytics & Insights",
     description: "Monitor sales performance, customer feedback, and market trends. Generate detailed reports for data-driven decisions.",
-    image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=800&fit=crop&q=90",
+    image: "/hero/image.png?v=2",
   },
   {
     id: "tab-4",
     number: 4,
     title: "Business Growth Tools",
     description: "Optimize pricing strategies, manage listings efficiently, and scale your business with advanced automation.",
-    image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=1200&h=800&fit=crop&q=90",
+    image: "/hero/image3.png?v=2",
   },
 ];
 
