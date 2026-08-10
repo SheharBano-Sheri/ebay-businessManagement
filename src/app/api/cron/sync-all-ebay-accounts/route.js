@@ -157,9 +157,9 @@ async function syncAccount(account) {
   }
 
   // 4. Build date filter — eBay requires [start..end] with full ISO 8601 .sssZ on both dates.
-  const nowDate      = new Date();
-  const sinceDate    = new Date(nowDate.getTime() - DAYS_BACK * 24 * 60 * 60 * 1000);
-  const dateFilter   = `lastmodifieddate:[${sinceDate.toISOString()}..${nowDate.toISOString()}]`;
+  const nowDate = new Date();
+  const sinceDate = new Date(nowDate.getTime() - Number(DAYS_BACK) * 24 * 60 * 60 * 1000);
+  const dateFilter = `lastmodifieddate:[${sinceDate.toISOString()}..${nowDate.toISOString()}]`;
 
   // 5. Fetch all orders (paginated).
   let allOrders = [];

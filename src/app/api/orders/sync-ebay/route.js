@@ -174,11 +174,9 @@ export async function POST(request) {
     //   - open-ended range is used instead of explicit start..end
     // The filter value is percent-encoded in getOrders() via encodeURIComponent
     // so that brackets survive Node's WHATWG URL parser intact.
-    const nowDate      = new Date();
-    const sinceDate    = new Date(nowDate.getTime() - daysBack * 24 * 60 * 60 * 1000);
-    const sinceDateISO = sinceDate.toISOString(); // always includes .sssZ milliseconds
-    const nowDateISO   = nowDate.toISOString();
-    const dateFilter   = `lastmodifieddate:[${sinceDateISO}..${nowDateISO}]`;
+    const nowDate = new Date();
+    const sinceDate = new Date(nowDate.getTime() - Number(daysBack) * 24 * 60 * 60 * 1000);
+    const dateFilter = `lastmodifieddate:[${sinceDate.toISOString()}..${nowDate.toISOString()}]`;
     console.log('[sync-ebay] eBay date filter (before encoding):', dateFilter);
 
     // 7. Fetch all orders (paginate until exhausted)
